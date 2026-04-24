@@ -1,0 +1,94 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  role      String   // 'customer', 'owner', 'tenant'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  ownedProperties Property[] @relation("OwnerToProperty")
+  rentedProperty  Property?  @relation("TenantToProperty", fields: [propertyId], references: [id])
+  propertyId      String?    @unique
+
+  documents   TenantDocument[]
+  maintenance TenantMaintenance[]
+  electricity TenantElectricity[]
+  payments    TenantPayment[]
+  agreement   TenantAgreement?
+}
+
+model Property {
+  id         String   @id @default(uuid())
+  title      String
+  image      String
+  price      String
+  location   String
+  beds       Int
+  baths      Int
+  type       String   // e.g., 'House', 'Apartment'
+  capacity   Int?
+  
+  ownerId    String?
+  owner      User?    @relation("OwnerToProperty", fields: [ownerId], references: [id])
+  
+  tenant     User?    @relation("TenantToProperty")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model TenantDocument {
+  id        String   @id @default(uuid())
+  name      String
+  status    String   // 'Verified' | 'Pending' | 'Rejected'
+  date      String
+  tenantId  String
+  tenant    User     @relation(fields: [tenantId], references: [id])
+}
+
+model TenantMaintenance {
+  id          String   @id @default(uuid())
+  type        String
+  status      String   // 'Reported' | 'In Progress' | 'Resolved'
+  date        String
+  description String
+  tenantId    String
+  tenant      User     @relation(fields: [tenantId], references: [id])
+}
+
+model TenantElectricity {
+  id        String   @id @default(uuid())
+  month     String
+  amount    String
+  status    String   // 'Paid' | 'Unpaid'
+  tenantId  String
+  tenant    User     @relation(fields: [tenantId], references: [id])
+}
+
+model TenantPayment {
+  id        String   @id @default(uuid())
+  date      String
+  amount    String
+  type      String
+  tenantId  String
+  tenant    User     @relation(fields: [tenantId], references: [id])
+}
+
+model TenantAgreement {
+  id          String   @id @default(uuid())
+  renewalDate String
+  signedDate  String
+  status      String
+  tenantId    String   @unique
+  tenant      User     @relation(fields: [tenantId], references: [id])
+}

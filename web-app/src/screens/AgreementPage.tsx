@@ -1,21 +1,77 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const AgreementPage: React.FC = () => {
   const navigate = useNavigate();
-  
-  const agreementData = {
-    title: 'Residential Lease Agreement',
-    property: "Prem's House",
-    signedDate: '2025-04-01',
-    expiryDate: '2026-03-31',
-    renewalDate: '2026-03-15',
-    status: 'Active',
-    monthlyRent: '₹2,100',
-    deposit: '₹4,200',
+  const [agreement, setAgreement] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [sigName, setSigName] = useState('');
+  const [isSigning, setIsSigning] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('currentUser');
+    if (stored) {
+      const u = JSON.parse(stored);
+      fetchAgreement(u.id);
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchAgreement = async (tenantId: string) => {
+    try {
+      const res = await fetch(`/api/tenants/${tenantId}`);
+      const data = await res.json();
+      if (data && data.agreement) {
+        setAgreement(data.agreement);
+      } else {
+        // Mock create an initial draft agreement if none exists
+        const createRes = await fetch('/api/agreement', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId,
+            rent: '₹21,000/mo',
+            deposit: '₹42,000',
+            duration: 11,
+            terms: '1. Renter agrees to pay rent on or before 5th of each month.\n2. Renter shall maintain property cleanliness.\n3. Renter shall not make structural alterations without prior consent.'
+          })
+        });
+        const newAgreement = await createRes.json();
+        setAgreement(newAgreement);
+      }
+      setLoading(false);
+    } catch (err) {
+      console.error(err);
+      setLoading(false);
+    }
   };
 
-  const daysToRenewal = Math.ceil((new Date(agreementData.renewalDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
+  const handleSign = async () => {
+    if (!sigName.trim() || !agreement) return;
+    setIsSigning(true);
+    try {
+      const res = await fetch(`/api/agreement/${agreement.id}/sign`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          signature: sigName,
+          role: 'tenant'
+        })
+      });
+      const data = await res.json();
+      setAgreement(data);
+      alert('Agreement signed digitally!');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSigning(false);
+    }
+  };
+
+  const handleDownloadPDF = () => {
+    window.print();
+  };
 
   return (
     <div className="agreement-page">
@@ -27,65 +83,108 @@ const AgreementPage: React.FC = () => {
           </svg>
           Back
         </button>
-        <h1>Rental Agreement</h1>
+        <h1>Digital Rental Agreement</h1>
       </header>
 
-      <div className="agreement-container">
-        <div className="renewal-alert">
-          <div className="alert-icon">🔔</div>
-          <div className="alert-text">
-            <h4>Renewal Reminder</h4>
-            <p>Your agreement is due for renewal on <strong>{agreementData.renewalDate}</strong> (in {daysToRenewal} days).</p>
+      {loading ? (
+        <div className="loading-state">Accessing secure agreement escrow...</div>
+      ) : !agreement ? (
+        <div className="empty-state">No active lease agreement found. Contact owner.</div>
+      ) : (
+        <div className="agreement-container">
+          <div className="renewal-alert">
+            <div className="alert-icon">🔔</div>
+            <div className="alert-text">
+              <h4>Renewal Reminder</h4>
+              <p>Your agreement expires on <strong>{agreement.renewalDate}</strong>. Renewal notifications are sent automatically.</p>
+            </div>
+            <button className="renew-now-btn" onClick={() => alert('Renewal request dispatched to Owner!')}>Ask Renewal</button>
           </div>
-          <button className="renew-now-btn">Renew Now</button>
+
+          <div className="agreement-details-card">
+            <div className="card-header">
+              <div className="doc-icon">📜</div>
+              <div>
+                <h3>Residential Lease Agreement ({agreement.duration} Months)</h3>
+                <p className="property-name">Rented Property Premises</p>
+              </div>
+              <div className={`status-badge ${agreement.status.toLowerCase().replace(' ', '-')}`}>
+                {agreement.status}
+              </div>
+            </div>
+
+            <div className="details-grid">
+              <div className="detail-item">
+                <label>Agreement Draft Date</label>
+                <span>{agreement.signedDate}</span>
+              </div>
+              <div className="detail-item">
+                <label>Lease Expiry Date</label>
+                <span>{agreement.renewalDate}</span>
+              </div>
+              <div className="detail-item">
+                <label>Rent amount</label>
+                <span>{agreement.rent || '₹21,000/mo'}</span>
+              </div>
+              <div className="detail-item">
+                <label>Escrow Security Deposit</label>
+                <span>{agreement.deposit || '₹42,000'}</span>
+              </div>
+              
+              <div className="detail-item highlights">
+                <label>Lease Terms & Conditions</label>
+                <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.95rem', color: '#475569', lineHeight: '1.6' }}>
+                  {agreement.terms || 'Standard residential terms apply.'}
+                </div>
+              </div>
+
+              <div className="detail-item">
+                <label>Owner Digital Signature</label>
+                <span style={{ fontFamily: 'Dancing Script, cursive', color: '#3b82f6' }}>
+                  {agreement.ownerSignature || 'Pending Owner Signature'}
+                </span>
+              </div>
+
+              <div className="detail-item">
+                <label>Tenant Digital Signature</label>
+                {agreement.tenantSignature ? (
+                  <span style={{ fontFamily: 'Dancing Script, cursive', color: '#10b981', fontSize: '1.5rem' }}>
+                    ✍️ {agreement.tenantSignature}
+                  </span>
+                ) : (
+                  <div className="sign-box">
+                    <input 
+                      type="text" 
+                      placeholder="Type name to sign digitally" 
+                      value={sigName}
+                      onChange={(e) => setSigName(e.target.value)}
+                      style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                    />
+                    <button 
+                      onClick={handleSign} 
+                      disabled={!sigName.trim() || isSigning}
+                      className="sign-action-btn"
+                    >
+                      {isSigning ? 'Signing...' : 'Sign Lease'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="card-actions">
+              <button className="download-btn" onClick={handleDownloadPDF}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Print & Export PDF
+              </button>
+            </div>
+          </div>
         </div>
-
-        <div className="agreement-details-card">
-          <div className="card-header">
-            <div className="doc-icon">📜</div>
-            <div>
-              <h3>{agreementData.title}</h3>
-              <p className="property-name">{agreementData.property}</p>
-            </div>
-            <div className="status-badge">{agreementData.status}</div>
-          </div>
-
-          <div className="details-grid">
-            <div className="detail-item">
-              <label>Signed Date</label>
-              <span>{agreementData.signedDate}</span>
-            </div>
-            <div className="detail-item">
-              <label>Expiry Date</label>
-              <span>{agreementData.expiryDate}</span>
-            </div>
-            <div className="detail-item highlights">
-              <label>Renewal Date</label>
-              <span className="renewal-date-highlight">{agreementData.renewalDate}</span>
-            </div>
-            <div className="detail-item">
-              <label>Monthly Rent</label>
-              <span>{agreementData.monthlyRent}</span>
-            </div>
-            <div className="detail-item">
-              <label>Security Deposit</label>
-              <span>{agreementData.deposit}</span>
-            </div>
-          </div>
-
-          <div className="card-actions">
-            <button className="download-btn">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-              </svg>
-              Download PDF
-            </button>
-            <button className="view-btn">View Full Document</button>
-          </div>
-        </div>
-      </div>
+      )}
 
       <style>{`
         .agreement-page {
@@ -138,21 +237,10 @@ const AgreementPage: React.FC = () => {
           border: 1px solid #ffedd5;
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
         }
-        .alert-icon {
-          font-size: 2rem;
-        }
-        .alert-text {
-          flex: 1;
-        }
-        .alert-text h4 {
-          color: #9a3412;
-          margin: 0;
-          font-size: 1.125rem;
-        }
-        .alert-text p {
-          color: #c2410c;
-          margin: 0.25rem 0 0;
-        }
+        .alert-icon { font-size: 2rem; }
+        .alert-text { flex: 1; }
+        .alert-text h4 { color: #9a3412; margin: 0; font-size: 1.125rem; }
+        .alert-text p { color: #c2410c; margin: 0.25rem 0 0; }
         .renew-now-btn {
           padding: 0.75rem 1.5rem;
           background: #ea580c;
@@ -200,13 +288,15 @@ const AgreementPage: React.FC = () => {
         }
         .status-badge {
           margin-left: auto;
-          background: #dcfce7;
-          color: #15803d;
+          background: #fee2e2;
+          color: #991b1b;
           padding: 0.5rem 1.25rem;
           border-radius: 99px;
           font-weight: 700;
           font-size: 0.875rem;
         }
+        .status-badge.active { background: #dcfce7; color: #15803d; }
+        .status-badge.partially-signed { background: #fef08a; color: #854d0e; }
         .details-grid {
           display: grid;
           grid-template-columns: repeat(2, 1fr);
@@ -236,10 +326,6 @@ const AgreementPage: React.FC = () => {
           padding: 1.5rem;
           border-radius: 16px;
         }
-        .renewal-date-highlight {
-          color: #2563eb !important;
-          font-size: 1.5rem !important;
-        }
         .card-actions {
           display: flex;
           gap: 1rem;
@@ -250,7 +336,7 @@ const AgreementPage: React.FC = () => {
           align-items: center;
           justify-content: center;
           gap: 0.75rem;
-          padding: 1rem;
+          padding: 1.25rem;
           background: #0f172a;
           color: white;
           border: none;
@@ -259,24 +345,22 @@ const AgreementPage: React.FC = () => {
           cursor: pointer;
           transition: all 0.2s;
         }
-        .view-btn {
-          flex: 1;
-          padding: 1rem;
-          background: white;
-          border: 1px solid #e2e8f0;
-          border-radius: 16px;
-          font-weight: 700;
-          color: #475569;
+        .download-btn:hover { background: #1e293b; }
+        .sign-box {
+          display: flex;
+          gap: 0.5rem;
+          align-items: center;
+        }
+        .sign-action-btn {
+          background: #10b981;
+          color: white;
+          border: none;
+          padding: 0.5rem 1rem;
+          border-radius: 8px;
           cursor: pointer;
-          transition: all 0.2s;
+          font-weight: 700;
         }
-        .download-btn:hover {
-          background: #1e293b;
-        }
-        .view-btn:hover {
-          background: #f8fafc;
-          border-color: #cbd5e1;
-        }
+        .sign-action-btn:hover { background: #059669; }
       `}</style>
     </div>
   );

@@ -1,35 +1,37 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 interface Payment {
   id: string;
-  type: 'rent' | 'electricity' | 'other';
-  amount: number;
+  type: string;
+  amount: string;
   date: string;
-  forMonth?: string;
 }
 
 const PaymentsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [payments, setPayments] = React.useState<Payment[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  React.useEffect(() => {
-    fetch('/api/tenants')
-      .then(res => res.json())
-      .then(tenants => {
-        if (tenants.length > 0) {
-          return fetch(`/api/tenants/${tenants[0].id}/payments`);
+  useEffect(() => {
+    const loadPayments = async () => {
+      try {
+        const stored = localStorage.getItem('currentUser');
+        if (stored) {
+          const user = JSON.parse(stored);
+          const res = await fetch(`/api/tenants/${user.id}/payments`);
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setPayments(data);
+          }
         }
-        return [];
-      })
-      .then(res => {
-        if (Array.isArray(res)) return res;
-        return res.json();
-      })
-      .then(data => {
-        if (Array.isArray(data)) setPayments(data);
-      })
-      .catch(console.error);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadPayments();
   }, []);
 
   return (
@@ -42,38 +44,49 @@ const PaymentsPage: React.FC = () => {
           </svg>
           Back
         </button>
-        <h1>Payment History</h1>
+        <h1>Payment Receipts & History</h1>
       </header>
 
-      <div className="payments-list">
-        {payments.length === 0 ? (
-          <div className="empty-state">
-            <p>No payments recorded yet.</p>
-          </div>
-        ) : (
-          payments.map((payment) => (
-            <div key={payment.id} className="payment-card-item">
-              <div className="payment-main">
-                <div className={`payment-icon ${payment.type}`}>
-                  {payment.type === 'rent' ? '🏠' : '⚡'}
-                </div>
-                <div className="payment-details">
-                  <div className="payment-type-text">
-                    {payment.type === 'rent' ? 'Rent Payment' : 'Electricity Bill'}
-                  </div>
-                  <div className="payment-meta">
-                    {payment.forMonth && <span className="month">{payment.forMonth} • </span>}
-                    <span className="date">{new Date(payment.date).toLocaleDateString()}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="payment-amount">
-                ₹{payment.amount.toLocaleString()}
-              </div>
+      {loading ? (
+        <div className="loading-state">Fetching billing history...</div>
+      ) : (
+        <div className="payments-list">
+          {payments.length === 0 ? (
+            <div className="empty-state">
+              <p>No payments recorded yet.</p>
             </div>
-          ))
-        )}
-      </div>
+          ) : (
+            payments.map((payment) => (
+              <div key={payment.id} className="payment-card-item">
+                <div className="payment-main">
+                  <div className={`payment-icon ${payment.type.toLowerCase()}`}>
+                    {payment.type === 'Electricity' ? '⚡' : '🏠'}
+                  </div>
+                  <div className="payment-details">
+                    <div className="payment-type-text">
+                      {payment.type} Payment
+                    </div>
+                    <div className="payment-meta">
+                      <span className="date">Paid on {payment.date}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="amount-action">
+                  <div className="payment-amount">
+                    {payment.amount}
+                  </div>
+                  <button 
+                    className="receipt-btn" 
+                    onClick={() => alert(`Receipt downloaded for transaction ID: ${payment.id}`)}
+                  >
+                    📄 Receipt
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       <style>{`
         .payments-page {
@@ -111,6 +124,11 @@ const PaymentsPage: React.FC = () => {
           font-weight: 800;
           color: #111827;
         }
+        .loading-state {
+          text-align: center;
+          padding: 4rem;
+          color: #64748b;
+        }
         .payments-list {
           display: flex;
           flex-direction: column;
@@ -128,7 +146,7 @@ const PaymentsPage: React.FC = () => {
           transition: transform 0.2s;
         }
         .payment-card-item:hover {
-          transform: scale(1.02);
+          transform: scale(1.01);
         }
         .payment-main {
           display: flex;
@@ -144,12 +162,11 @@ const PaymentsPage: React.FC = () => {
           justify-content: center;
           font-size: 1.5rem;
         }
-        .payment-icon.rent {
-          background: #eff6ff;
-        }
-        .payment-icon.electricity {
-          background: #fefce8;
-        }
+        .payment-icon.electricity { background: #fefce8; }
+        .payment-icon.rent { background: #eff6ff; }
+        .payment-icon.deposit { background: #f0fdf4; }
+        .payment-icon.maintenance { background: #fdf2f8; }
+
         .payment-details {
           display: flex;
           flex-direction: column;
@@ -163,11 +180,28 @@ const PaymentsPage: React.FC = () => {
           font-size: 0.875rem;
           color: #64748b;
         }
+        .amount-action {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
         .payment-amount {
           font-size: 1.5rem;
           font-weight: 800;
           color: #10b981;
         }
+        .receipt-btn {
+          background: #f1f5f9;
+          border: none;
+          color: #475569;
+          padding: 0.5rem 0.75rem;
+          border-radius: 8px;
+          font-size: 0.8rem;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .receipt-btn:hover { background: #e2e8f0; }
+
         .empty-state {
           text-align: center;
           padding: 4rem 2rem;

@@ -1,17 +1,45 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import UPIPaymentModal from '../components/UPIPaymentModal';
 
 const RentPaymentPage: React.FC = () => {
   const navigate = useNavigate();
   const [month, setMonth] = useState('');
-  const [amount, setAmount] = useState('2100');
+  const [amount, setAmount] = useState('15000');
+  const [paymentType, setPaymentType] = useState('Rent');
   const [isUPIModalOpen, setIsUPIModalOpen] = useState(false);
+  const [userId, setUserId] = useState('');
 
-  const handlePay = () => {
-    console.log('Payment processed');
-    setIsUPIModalOpen(false);
-    navigate('/pay-history');
+  useEffect(() => {
+    const stored = localStorage.getItem('currentUser');
+    if (stored) {
+      const u = JSON.parse(stored);
+      setUserId(u.id);
+    }
+  }, []);
+
+  const handlePay = async () => {
+    if (!userId) return;
+    try {
+      const res = await fetch('/api/payments/pay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: userId,
+          amount: parseFloat(amount),
+          type: paymentType
+        })
+      });
+      if (res.ok) {
+        setIsUPIModalOpen(false);
+        alert(`Payment of ₹${amount} for ${paymentType} successful! Receipt downloaded.`);
+        navigate('/pay-history');
+      } else {
+        alert('Payment failed');
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
@@ -24,32 +52,46 @@ const RentPaymentPage: React.FC = () => {
           </svg>
           Back
         </button>
-        <h1>Secure Rent Payment</h1>
+        <h1>Secure Payment Portal</h1>
       </header>
 
       <div className="payment-content">
         <div className="summary-card">
           <div className="summary-row">
-            <span className="label">Property</span>
-            <span className="value">Prem's House</span>
+            <span className="label">Paying For</span>
+            <span className="value">{paymentType}</span>
           </div>
           <div className="summary-row">
-            <span className="label">Fixed Rent</span>
-            <span className="value">₹2,100</span>
+            <span className="label">Month reference</span>
+            <span className="value">{month || 'N/A'}</span>
           </div>
           <div className="summary-divider"></div>
           <div className="summary-row total">
             <span className="total-label">Paying Now</span>
-            <span className="total-value">₹{amount || '0'}</span>
+            <span className="total-value">₹{parseFloat(amount).toLocaleString()}</span>
           </div>
         </div>
 
         <div className="payment-form">
           <div className="input-field">
-            <label>For Month</label>
+            <label>Payment Category</label>
+            <select 
+              value={paymentType}
+              onChange={(e) => setPaymentType(e.target.value)}
+              style={{ width: '100%', padding: '1rem', border: '1px solid #cbd5e1', borderRadius: '12px', background: '#f8fafc' }}
+            >
+              <option value="Rent">Monthly Rent</option>
+              <option value="Deposit">Security Deposit</option>
+              <option value="Maintenance">Maintenance Charges</option>
+              <option value="Electricity">Electricity Bill</option>
+            </select>
+          </div>
+
+          <div className="input-field">
+            <label>Month Reference</label>
             <input 
               type="text" 
-              placeholder="e.g. Nov 2026" 
+              placeholder="e.g. November 2026" 
               value={month}
               onChange={(e) => setMonth(e.target.value)}
             />
@@ -76,7 +118,7 @@ const RentPaymentPage: React.FC = () => {
 
         <div className="security-info">
           <span>🔒</span>
-          <p>Secure encrypted payment via UPI</p>
+          <p>Secure encrypted payment via UPI (Razorpay Secure)</p>
         </div>
       </div>
 
@@ -84,7 +126,7 @@ const RentPaymentPage: React.FC = () => {
         isOpen={isUPIModalOpen}
         onClose={() => setIsUPIModalOpen(false)}
         amount={parseFloat(amount) || 0}
-        description={`Rent for ${month}`}
+        description={`${paymentType} for ${month}`}
         onConfirm={handlePay}
       />
 

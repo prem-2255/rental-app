@@ -16,23 +16,20 @@ const ElectricityPage: React.FC = () => {
   const [bills, setBills] = useState<Bill[]>([]);
 
   React.useEffect(() => {
-    // Fetch the first tenant to simulate a logged-in user
-    fetch('/api/tenants')
-      .then(res => res.json())
-      .then(tenants => {
-        if (tenants.length > 0) {
-          return fetch(`/api/tenants/${tenants[0].id}/electricity`);
+    const loadBills = async () => {
+      try {
+        const tenantsRes = await fetch('/api/tenants');
+        const tenants = await tenantsRes.json();
+        if (tenants && tenants.length > 0) {
+          const billsRes = await fetch(`/api/tenants/${tenants[0].id}/electricity`);
+          const data = await billsRes.json();
+          if (Array.isArray(data)) setBills(data);
         }
-        return [];
-      })
-      .then(res => {
-        if (Array.isArray(res)) return res;
-        return res.json();
-      })
-      .then(data => {
-        if (Array.isArray(data)) setBills(data);
-      })
-      .catch(console.error);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    loadBills();
   }, []);
   const [isUPIModalOpen, setIsUPIModalOpen] = useState(false);
   const [payingBill, setPayingBill] = useState<Bill | null>(null);

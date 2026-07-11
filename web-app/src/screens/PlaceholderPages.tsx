@@ -20,7 +20,6 @@ const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => {
 
 export const PayRentPage = () => <PlaceholderPage title="Pay Rent" />;
 export const ElectricityPage = () => <PlaceholderPage title="Electricity" />;
-export const PropertiesPage = () => <PlaceholderPage title="Your Properties" />;
 export const BroadcastPage = () => <PlaceholderPage title="Broadcast" />;
 export const CompletedWorkPage = () => <PlaceholderPage title="Completed Work" />;
 export const InventoryPage = () => <PlaceholderPage title="Inventory" />;

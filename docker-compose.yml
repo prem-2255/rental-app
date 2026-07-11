@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5001"
+    environment:
+      - DATABASE_URL=file:./dev.db
+      - FAST2SMS_API_KEY=uoFQac4SBMsXHnRILkeb1NWtdi807yAfvp9mO3jZgPCqxwY6ErLOrF4UdyVKx3Ctp26weu5mq7zWaNYX
+      - PORT=5001
+    volumes:
+      - app-db:/app/backend/prisma
+
+volumes:
+  app-db:

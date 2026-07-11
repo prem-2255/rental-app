@@ -4,37 +4,143 @@ import type { Property } from '../types';
 
 interface BookingPageProps {
   properties: Property[];
+  currentUser: any;
 }
 
-const BookingPage: React.FC<BookingPageProps> = ({ properties }) => {
+const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
-  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [isAiSearch, setIsAiSearch] = useState(false);
+  const [loadingAi, setLoadingAi] = useState(false);
+  const [aiSearchResults, setAiSearchResults] = useState<Property[]>([]);
+  const [selectedProperty, setSelectedProperty] = useState<any | null>(null);
   const [isBookingConfirmed, setIsBookingConfirmed] = useState(false);
+  const [visitDate, setVisitDate] = useState('');
 
   const handleBookNow = (property: Property) => {
-    setSelectedProperty(property);
+    setSelectedProperty({
+      ...property,
+      deposit: '₹12,000',
+      maintenance: '₹1,200',
+      suitability: 'Family / Bachelors',
+      furnishedStatus: 'Semi-Furnished',
+      parking: true,
+      petFriendly: true,
+      amenities: 'Wi-Fi, AC, Lift, CCTV, Parking',
+      nearby: 'Metro Station (0.5km), Apex Global School (1.2km), City Hospital (2km)'
+    });
     setIsBookingConfirmed(false);
   };
 
-  const confirmBooking = () => {
-    // Simulate notification logic
-    setIsBookingConfirmed(true);
-    // In a real app, this would trigger a backend notification to property.ownerId
+  const handleSearchSubmit = async () => {
+    if (isAiSearch && search.trim()) {
+      setLoadingAi(true);
+      try {
+        const res = await fetch('/api/ai/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: search })
+        });
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setAiSearchResults(data);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoadingAi(false);
+      }
+    }
+  };
+
+  const confirmBooking = async () => {
+    if (!selectedProperty || !currentUser) return;
+    try {
+      const res = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          propertyId: selectedProperty.id,
+          customerId: currentUser.id,
+          visitDate: visitDate || undefined
+        })
+      });
+      if (res.ok) {
+        setIsBookingConfirmed(true);
+      } else {
+        console.error('Failed to submit booking');
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const closeModal = () => {
     setSelectedProperty(null);
     setIsBookingConfirmed(false);
+    setVisitDate('');
   };
 
-  const filteredProperties = properties.filter(p => 
+  const propertiesToRender = isAiSearch ? (search.trim() ? aiSearchResults : properties) : properties.filter(p => 
     p.title.toLowerCase().includes(search.toLowerCase()) || 
     p.location.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
     <div className="booking-page">
+      <style>{`
+        .ai-search-toggle {
+          background: #eff6ff;
+          border: 1px solid #bfdbfe;
+          color: #1e40af;
+          padding: 0.5rem 1rem;
+          border-radius: 99px;
+          font-size: 0.8rem;
+          font-weight: 700;
+          cursor: pointer;
+          margin-bottom: 1rem;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          transition: all 0.2s;
+        }
+        .ai-search-toggle.active {
+          background: #2563eb;
+          color: white;
+          border-color: #2563eb;
+        }
+        .ai-badge-indicator {
+          background: #3b82f6;
+          color: white;
+          font-size: 0.65rem;
+          padding: 0.15rem 0.4rem;
+          border-radius: 4px;
+          font-weight: 800;
+        }
+        .visit-date-selector {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 1rem;
+          margin-top: 1rem;
+        }
+        .visit-date-selector label {
+          font-weight: 700;
+          font-size: 0.75rem;
+          text-transform: uppercase;
+          color: #475569;
+          margin-bottom: 0.5rem;
+          display: block;
+        }
+        .visit-date-input {
+          width: 100%;
+          padding: 0.75rem;
+          border: 1px solid #cbd5e1;
+          border-radius: 8px;
+          outline: none;
+        }
+      `}</style>
+
       <header className="booking-header">
         <button onClick={() => navigate('/')} className="back-button">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -47,32 +153,42 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties }) => {
       </header>
 
       <div className="filter-section">
+        <button 
+          className={`ai-search-toggle ${isAiSearch ? 'active' : ''}`}
+          onClick={() => {
+            setIsAiSearch(!isAiSearch);
+            setSearch('');
+          }}
+        >
+          🤖 {isAiSearch ? 'AI Smart Search Enabled' : 'Enable AI Search (Natural Language)'}
+        </button>
+
         <div className="search-bar-wrapper">
           <input 
             type="text" 
-            placeholder="Search by location, property name..." 
+            placeholder={isAiSearch ? 'Try "2BHK under ₹15000 fully furnished"' : 'Search by location, property name...'} 
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              if (!isAiSearch) return;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSearchSubmit();
+            }}
             className="search-input"
           />
-          <button className="search-button">
+          <button className="search-button" onClick={handleSearchSubmit}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
           </button>
         </div>
-        <div className="filter-chips">
-          <button className="filter-chip active">All</button>
-          <button className="filter-chip">Apartment</button>
-          <button className="filter-chip">Loft</button>
-          <button className="filter-chip">House</button>
-          <button className="filter-chip">2BHK</button>
-        </div>
+        {loadingAi && <p style={{ fontSize: '0.85rem', color: '#3b82f6' }}>🤖 AI Recommendation Engine parsing query...</p>}
       </div>
 
       <div className="property-grid">
-        {filteredProperties.map(property => (
+        {propertiesToRender.map(property => (
           <div key={property.id} className="property-card-alt">
             <div className="property-image-wrapper">
               <img src={property.image} alt={property.title} />
@@ -107,7 +223,7 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties }) => {
                   <h2>Confirm Your Booking</h2>
                   <button className="close-x" onClick={closeModal}>&times;</button>
                 </div>
-                <div className="modal-body">
+                <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
                   <div className="property-summary-mini">
                     <img src={selectedProperty.image} alt="" />
                     <div className="summary-text">
@@ -116,7 +232,25 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties }) => {
                     </div>
                   </div>
                   
-                  <div className="owner-contact-card">
+                  <div style={{ margin: '1rem 0', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <p>📦 <strong>Deposit:</strong> {selectedProperty.deposit} | <strong>Maint:</strong> {selectedProperty.maintenance}</p>
+                    <p>🛋️ <strong>Furnishing:</strong> {selectedProperty.furnishedStatus} | 🚗 <strong>Parking:</strong> Yes</p>
+                    <p>🛠️ <strong>Amenities:</strong> {selectedProperty.amenities}</p>
+                    <p>🏫 <strong>Nearby Landmarks:</strong> {selectedProperty.nearby}</p>
+                  </div>
+                  
+                  <div className="visit-date-selector">
+                    <label>Schedule Visit Date</label>
+                    <input 
+                      type="date" 
+                      value={visitDate}
+                      onChange={(e) => setVisitDate(e.target.value)}
+                      className="visit-date-input"
+                      required
+                    />
+                  </div>
+
+                  <div className="owner-contact-card" style={{ marginTop: '1rem' }}>
                     <div className="contact-header">
                       <span className="contact-icon">📞</span>
                       <div className="contact-label">Owner's Contact Info</div>
@@ -124,12 +258,6 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties }) => {
                     <div className="owner-phone">
                       {selectedProperty.ownerPhone || '+91 91234 56789'}
                     </div>
-                    <p className="contact-subtext">You can reach out to the owner directly for visits or inquiries.</p>
-                  </div>
-
-                  <div className="notification-hint">
-                    <span className="hint-icon">🔔</span>
-                    <p>Click confirm to send an official booking request to the owner.</p>
                   </div>
                 </div>
                 <div className="modal-footer">

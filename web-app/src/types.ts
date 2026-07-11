@@ -1,4 +1,4 @@
-export type UserRole = 'customer' | 'owner';
+export type UserRole = 'customer' | 'owner' | 'admin';
 export type SubscriptionPlan = 'basic' | 'premium' | 'elite';
 
 export interface Property {
@@ -60,4 +60,14 @@ export interface Tenant {
     signedDate: string;
     status: string;
   };
+}
+
+export interface BookingRequest {
+  id: string;
+  propertyId: string;
+  property: Property;
+  customerId: string;
+  customer: any; // User type in backend
+  status: 'Pending' | 'Approved' | 'Rejected';
+  createdAt: string;
 }

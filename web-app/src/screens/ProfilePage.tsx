@@ -102,10 +102,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userRole, onLogout }) => {
                <div className="setting-label">Email Notifications</div>
                <div className="toggle-sim active"></div>
               </div>
-              <div className="setting-item">
-               <div className="setting-label">Privacy Mode</div>
-               <div className="toggle-sim"></div>
-              </div>
+
             </div>
           </div>
 

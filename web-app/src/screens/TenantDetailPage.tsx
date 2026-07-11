@@ -17,6 +17,30 @@ const TenantDetailPage: React.FC = () => {
       .catch(console.error);
   }, [tenantId]);
 
+  const handleUpdateStatus = async (requestId: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/maintenance/${requestId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) {
+        setTenant(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            maintenance: prev.maintenance.map(m => m.id === requestId ? { ...m, status: newStatus as any } : m)
+          };
+        });
+      } else {
+        alert('Failed to update maintenance status');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error updating status');
+    }
+  };
+
   if (!tenant) {
     return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading tenant profile...</div>;
   }
@@ -115,6 +139,27 @@ const TenantDetailPage: React.FC = () => {
                     </div>
                     <h4>{req.type}</h4>
                     <p>{req.description}</p>
+                    
+                    {req.status !== 'Resolved' && (
+                      <div className="maintenance-actions" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
+                        {req.status === 'Reported' && (
+                          <button 
+                            className="status-action-btn start" 
+                            onClick={() => handleUpdateStatus(req.id, 'In Progress')}
+                            style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '0.4rem 0.8rem', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                          >
+                            ⚙️ Start Progress
+                          </button>
+                        )}
+                        <button 
+                          className="status-action-btn resolve" 
+                          onClick={() => handleUpdateStatus(req.id, 'Resolved')}
+                          style={{ background: '#10b981', color: 'white', border: 'none', padding: '0.4rem 0.8rem', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                        >
+                          ✅ Resolve Issue
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

@@ -14,8 +14,10 @@ interface MaintenanceRequest {
 
 const MaintenancePage: React.FC = () => {
   const navigate = useNavigate();
+  const [step, setStep] = useState(1);
   const [description, setDescription] = useState('');
-  const [issueType, setIssueType] = useState('General');
+  const [issueType, setIssueType] = useState('Plumbing');
+  const [photo, setPhoto] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
   const [userId, setUserId] = useState('');
@@ -60,15 +62,15 @@ const MaintenancePage: React.FC = () => {
     };
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     if (!userId) return;
     setIsSubmitting(true);
 
     try {
       const newRequest = {
         type: issueType,
-        description,
+        description: description || `Issue with ${issueType}`,
+        photo: photo || undefined,
         status: 'Open',
         date: new Date().toLocaleDateString()
       };
@@ -82,7 +84,8 @@ const MaintenancePage: React.FC = () => {
 
       setRequests(prev => [savedRequest, ...prev]);
       setDescription('');
-      setIssueType('General');
+      setPhoto('');
+      setStep(1);
       alert('Maintenance complaint successfully filed!');
     } catch (err) {
       console.error(err);
@@ -91,6 +94,16 @@ const MaintenancePage: React.FC = () => {
       setIsSubmitting(false);
     }
   };
+
+  const categories = [
+    { name: 'Plumbing', icon: '🚰' },
+    { name: 'Electrical', icon: '⚡' },
+    { name: 'Cleaning', icon: '🧹' },
+    { name: 'AC', icon: '❄️' },
+    { name: 'Internet', icon: '🌐' },
+    { name: 'Door Lock', icon: '🔒' },
+    { name: 'Other', icon: '❓' },
+  ];
 
   return (
     <div className="maintenance-page">
@@ -107,37 +120,88 @@ const MaintenancePage: React.FC = () => {
 
       <div className="maintenance-container">
         <div className="request-form-section">
-          <div className="card">
-            <h2>File a Complaint</h2>
-            <p className="card-subtitle">Select a category and describe the issue. Our team will verify and resolve it shortly.</p>
+          <div className="card shadow-card">
+            <h2>Quick Maintenance Request</h2>
             
-            <form onSubmit={handleSubmit} className="maintenance-form">
-              <div className="form-group">
-                <label>Category</label>
-                <select value={issueType} onChange={(e) => setIssueType(e.target.value)}>
-                  <option value="General">General Issue</option>
-                  <option value="Roof Leakage">Roof/Wall Leakage</option>
-                  <option value="Plumbing">Plumbing & Water</option>
-                  <option value="Electrical">Electrical Repairs</option>
-                  <option value="Appliance">AC, TV or Refrigerator</option>
-                  <option value="Furniture">Bed or Sofa Damage</option>
-                </select>
-              </div>
+            {/* Step Indicators */}
+            <div className="step-indicators-row">
+              <span className={`step-dot ${step >= 1 ? 'active' : ''}`}>1. Category</span>
+              <span className={`step-dot ${step >= 2 ? 'active' : ''}`}>2. Photo & Notes</span>
+              <span className={`step-dot ${step >= 3 ? 'active' : ''}`}>3. Submit</span>
+            </div>
 
-              <div className="form-group">
-                <label>Details & Description</label>
-                <textarea 
-                  placeholder="Tell us what needs fixing. E.g. Kitchen tap is leaking when turned on..." 
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  required
-                />
+            {step === 1 && (
+              <div className="step-content">
+                <h3>Step 1: Select Category</h3>
+                <div className="categories-grid-selection">
+                  {categories.map(c => (
+                    <button 
+                      key={c.name}
+                      onClick={() => { setIssueType(c.name); setStep(2); }}
+                      className={`cat-select-btn ${issueType === c.name ? 'selected' : ''}`}
+                    >
+                      <span className="icon">{c.icon}</span>
+                      <span className="lbl">{c.name}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
+            )}
 
-              <button type="submit" className="submit-btn" disabled={isSubmitting}>
-                {isSubmitting ? 'Filing Complaint...' : 'Submit Complaint'}
-              </button>
-            </form>
+            {step === 2 && (
+              <div className="step-content">
+                <h3>Step 2: Add Details & Photo</h3>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label>Add Photo (Optional Reference Image Link)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Paste condition photo URL here..." 
+                    value={photo} 
+                    onChange={(e) => setPhoto(e.target.value)} 
+                    style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                  />
+                  {photo && (
+                    <div style={{ marginTop: '1rem' }}>
+                      <img src={photo} alt="Preview" style={{ width: '100%', maxHeight: '150px', objectFit: 'cover', borderRadius: '12px' }} />
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label>Problem Description</label>
+                  <textarea 
+                    placeholder="Tell us what needs fixing. E.g. Kitchen tap is leaking when turned on..." 
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    required
+                    style={{ width: '100%', minHeight: '100px', padding: '0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+
+                <div className="nav-buttons" style={{ display: 'flex', gap: '1rem' }}>
+                  <button className="back-btn-step" onClick={() => setStep(1)}>Back</button>
+                  <button className="next-btn-step" onClick={() => setStep(3)} disabled={!description.trim()}>Next</button>
+                </div>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div className="step-content">
+                <h3>Step 3: Confirm Request</h3>
+                <div className="summary-details-card" style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '16px', marginBottom: '1.5rem', border: '1px solid #e2e8f0' }}>
+                  <div>Category: <strong>{issueType}</strong></div>
+                  <div style={{ marginTop: '0.5rem' }}>Description: <p style={{ margin: '0.2rem 0 0 0', color: '#475569' }}>{description}</p></div>
+                  {photo && <div style={{ marginTop: '0.5rem' }}>Photo Attached: <span style={{ color: '#10b981' }}>Yes</span></div>}
+                </div>
+
+                <div className="nav-buttons" style={{ display: 'flex', gap: '1rem' }}>
+                  <button className="back-btn-step" onClick={() => setStep(2)}>Back</button>
+                  <button className="submit-btn-step" onClick={handleSubmit} disabled={isSubmitting}>
+                    {isSubmitting ? 'Filing Request...' : 'Confirm & Submit'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

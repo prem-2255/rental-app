@@ -434,7 +434,17 @@ app.post('/api/seed', async (req, res) => {
         beds: 3,
         baths: 2,
         type: "House",
-        ownerId: owner.id
+        ownerId: owner.id,
+        houseRules: "No Smoking, No Pets, Quiet Hours after 10 PM, Gated Parking, Visitor Check-in Required",
+        nearbyPlaces: "Grocery Store (0.3km), Apex Hospital (1.2km), pharmacy (0.2km), ATM (0.1km), Bus Stop (0.4km), Metro Station (0.6km), Gym (0.5km), School (1.0km)",
+        safetyCctv: true,
+        safetySecurityGuard: true,
+        safetyGated: true,
+        safetyFire: true,
+        safetyLighting: true,
+        responseTime: "Replies within 10 minutes",
+        visitDate: "2026-07-20",
+        visitTime: "10:30 AM"
       }
     });
 
@@ -673,6 +683,84 @@ app.post('/api/payments/pay', async (req, res) => {
       }
     });
     res.json({ success: true, payment, receiptUrl: `/receipts/${payment.id}.pdf` });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ─── Favorites Management ───────────────────────────────────────────
+app.post('/api/users/:id/favorites', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { propertyId } = req.body;
+    
+    if (!propertyId) {
+      return res.status(400).json({ error: 'propertyId is required' });
+    }
+    
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    let saved = user.savedProperties ? user.savedProperties.split(',').filter(Boolean) : [];
+    if (saved.includes(propertyId)) {
+      saved = saved.filter(p => p !== propertyId);
+    } else {
+      saved.push(propertyId);
+    }
+    
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: { savedProperties: saved.join(',') }
+    });
+    
+    res.json({ success: true, savedProperties: updatedUser.savedProperties });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ─── Checklist Management ───────────────────────────────────────────
+app.put('/api/users/:id/checklist', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role, checklist } = req.body; // role: 'tenant' | 'owner', checklist: JSON object
+    
+    const data: any = {};
+    if (role === 'owner') {
+      data.checklistOwner = JSON.stringify(checklist);
+    } else {
+      data.checklistTenant = JSON.stringify(checklist);
+    }
+    
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data
+    });
+    
+    res.json({ 
+      success: true, 
+      checklistTenant: updatedUser.checklistTenant,
+      checklistOwner: updatedUser.checklistOwner 
+    });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ─── Split Rent Management ───────────────────────────────────────────
+app.put('/api/users/:id/split-rent', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { splitRent } = req.body; // JSON object/array
+    
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: { splitRent: JSON.stringify(splitRent) }
+    });
+    
+    res.json({ success: true, splitRent: updatedUser.splitRent });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }

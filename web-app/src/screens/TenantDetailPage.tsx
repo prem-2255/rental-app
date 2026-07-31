@@ -5,17 +5,55 @@ import type { Tenant } from '../types';
 const TenantDetailPage: React.FC = () => {
   const { tenantId } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'docs' | 'agreement' | 'maintenance' | 'bills' | 'payments'>('docs');
+  const [activeTab, setActiveTab] = useState<'docs' | 'agreement' | 'checklist' | 'maintenance' | 'bills' | 'payments'>('docs');
 
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [tenantChecklist, setTenantChecklist] = useState<any>({
+    keys: false, meter: false, photos: false, inventory: false, agreement: false
+  });
+  const [ownerChecklist, setOwnerChecklist] = useState<any>({
+    keys: false, meter: false, photos: false, inventory: false, agreement: false
+  });
 
   React.useEffect(() => {
     if (!tenantId) return;
     fetch(`/api/tenants/${tenantId}`)
       .then(res => res.json())
-      .then(data => setTenant(data))
+      .then(data => {
+        setTenant(data);
+        if (data.checklistTenant) {
+          try { setTenantChecklist(JSON.parse(data.checklistTenant)); } catch (e) { console.error(e); }
+        }
+        if (data.checklistOwner) {
+          try { setOwnerChecklist(JSON.parse(data.checklistOwner)); } catch (e) { console.error(e); }
+        }
+      })
       .catch(console.error);
   }, [tenantId]);
+
+  const handleToggleChecklist = async (item: string) => {
+    if (!tenantId) return;
+    const updated = { ...ownerChecklist, [item]: !ownerChecklist[item] };
+    setOwnerChecklist(updated);
+    try {
+      const res = await fetch(`/api/users/${tenantId}/checklist`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: 'owner',
+          checklist: updated
+        })
+      });
+      if (res.ok) {
+        setTenant(prev => {
+          if (!prev) return null;
+          return { ...prev, checklistOwner: JSON.stringify(updated) };
+        });
+      }
+    } catch(err) {
+      console.error(err);
+    }
+  };
 
   const handleUpdateStatus = async (requestId: string, newStatus: string) => {
     try {
@@ -48,6 +86,7 @@ const TenantDetailPage: React.FC = () => {
   const tabs = [
     { id: 'docs', label: 'Documents', icon: '📄' },
     { id: 'agreement', label: 'Agreement', icon: '📜' },
+    { id: 'checklist', label: 'Checklist', icon: '📋' },
     { id: 'maintenance', label: 'Maintenance', icon: '🛠️' },
     { id: 'bills', label: 'Electricity', icon: '⚡' },
     { id: 'payments', label: 'Payments', icon: '💳' },
@@ -123,6 +162,52 @@ const TenantDetailPage: React.FC = () => {
                   <label>Signed Date</label>
                   <span>{tenant.agreement.signedDate}</span>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'checklist' && (
+            <div className="content-section">
+              <h3>Move-In Checklist Audit</h3>
+              <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+                Review tenant checklist confirmations and toggle owner validations.
+              </p>
+              <div className="checklist-owner-audit">
+                {[
+                  { key: 'keys', label: 'Keys Handed Over' },
+                  { key: 'meter', label: 'Meter Readings Logged' },
+                  { key: 'photos', label: 'Inspection Photos Uploaded' },
+                  { key: 'inventory', label: 'Inventory Checked' },
+                  { key: 'agreement', label: 'Lease Agreement Signed' }
+                ].map(item => {
+                  const isTenantChecked = tenantChecklist[item.key];
+                  const isOwnerChecked = ownerChecklist[item.key];
+                  return (
+                    <div key={item.key} className="detail-card doc-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', padding: '1.25rem' }}>
+                      <div>
+                        <strong style={{ display: 'block', fontSize: '1rem', color: '#1e293b' }}>{item.label}</strong>
+                        <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                          Tenant Status: <strong style={{ color: isTenantChecked ? '#10b981' : '#f59e0b' }}>{isTenantChecked ? '✓ Confirmed' : 'Pending'}</strong>
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleToggleChecklist(item.key)}
+                        style={{
+                          background: isOwnerChecked ? '#dcfce7' : '#fee2e2',
+                          color: isOwnerChecked ? '#15803d' : '#b91c1c',
+                          border: 'none',
+                          padding: '0.5rem 1rem',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        {isOwnerChecked ? '✓ Owner Approved' : 'Click to Approve'}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

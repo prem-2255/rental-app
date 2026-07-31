@@ -16,32 +16,6 @@ const CustomerInventoryPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [propertyId, setPropertyId] = useState('');
 
-  useEffect(() => {
-    const stored = localStorage.getItem('currentUser');
-    if (stored) {
-      const u = JSON.parse(stored);
-      fetchTenantDetails(u.id);
-    } else {
-      setLoading(false);
-    }
-  }, []);
-
-  const fetchTenantDetails = async (tenantId: string) => {
-    try {
-      const res = await fetch(`/api/tenants/${tenantId}`);
-      const data = await res.json();
-      if (data && data.propertyId) {
-        setPropertyId(data.propertyId);
-        loadInventory(data.propertyId);
-      } else {
-        setLoading(false);
-      }
-    } catch (err) {
-      console.error(err);
-      setLoading(false);
-    }
-  };
-
   const loadInventory = async (propId: string) => {
     try {
       const res = await fetch(`/api/properties/${propId}/inventory`);
@@ -70,6 +44,32 @@ const CustomerInventoryPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const fetchTenantDetails = async (tenantId: string) => {
+    try {
+      const res = await fetch(`/api/tenants/${tenantId}`);
+      const data = await res.json();
+      if (data && data.propertyId) {
+        setPropertyId(data.propertyId);
+        loadInventory(data.propertyId);
+      } else {
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error(err);
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const stored = localStorage.getItem('currentUser');
+    if (stored) {
+      const u = JSON.parse(stored);
+      Promise.resolve().then(() => fetchTenantDetails(u.id));
+    } else {
+      Promise.resolve().then(() => setLoading(false));
+    }
+  }, []);
 
   const handleAcknowledge = async (id: string) => {
     try {

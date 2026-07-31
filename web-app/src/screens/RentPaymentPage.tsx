@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import UPIPaymentModal from '../components/UPIPaymentModal';
 
@@ -8,15 +8,13 @@ const RentPaymentPage: React.FC = () => {
   const [amount, setAmount] = useState('15000');
   const [paymentType, setPaymentType] = useState('Rent');
   const [isUPIModalOpen, setIsUPIModalOpen] = useState(false);
-  const [userId, setUserId] = useState('');
-
-  useEffect(() => {
+  const [userId, _setUserId] = useState(() => {
     const stored = localStorage.getItem('currentUser');
     if (stored) {
-      const u = JSON.parse(stored);
-      setUserId(u.id);
+      try { return JSON.parse(stored).id || ''; } catch { return ''; }
     }
-  }, []);
+    return '';
+  });
 
   const handlePay = async () => {
     if (!userId) return;

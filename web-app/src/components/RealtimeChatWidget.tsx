@@ -45,12 +45,12 @@ const RealtimeChatWidget: React.FC<RealtimeChatWidgetProps> = ({ currentUser }) 
   useEffect(() => {
     if (!currentUser) return;
 
-    setLoadingContacts(true);
+    let isMounted = true;
     if (currentUser.role === 'owner') {
-      // Owners chat with all tenants + AI Bot
       fetch('/api/tenants')
         .then(res => res.json())
         .then(data => {
+          if (!isMounted) return;
           if (Array.isArray(data)) {
             const virtualAiBot: User = { id: 'ai-bot', name: 'RentApp AI Assistant', role: 'ai-bot' };
             setContacts([virtualAiBot, ...data]);
@@ -59,26 +59,27 @@ const RealtimeChatWidget: React.FC<RealtimeChatWidgetProps> = ({ currentUser }) 
         })
         .catch(err => {
           console.error('Error fetching tenants:', err);
-          setLoadingContacts(false);
+          if (isMounted) setLoadingContacts(false);
         });
     } else {
-      // Tenants/Customers chat with the Owner + AI Bot
       fetch('/api/users')
         .then(res => res.json())
         .then(data => {
+          if (!isMounted) return;
           if (Array.isArray(data)) {
             const owners = data.filter((u: User) => u.role === 'owner');
             const virtualAiBot: User = { id: 'ai-bot', name: 'RentApp AI Assistant', role: 'ai-bot' };
             setContacts([virtualAiBot, ...owners]);
-            setActiveContact(virtualAiBot); // Auto-select AI Bot first for a premium customer support experience!
+            setActiveContact(virtualAiBot);
           }
           setLoadingContacts(false);
         })
         .catch(err => {
           console.error('Error fetching owner:', err);
-          setLoadingContacts(false);
+          if (isMounted) setLoadingContacts(false);
         });
     }
+    return () => { isMounted = false; };
   }, [currentUser]);
 
   // Load message history when active contact changes
@@ -86,15 +87,17 @@ const RealtimeChatWidget: React.FC<RealtimeChatWidgetProps> = ({ currentUser }) 
     if (!currentUser || !activeContact) return;
 
     if (activeContact.id === 'ai-bot') {
-      setMessages([
-        {
-          id: 'welcome-ai',
-          text: "Hello! I am your RentApp AI Assistant. Ask me anything about paying rent, security deposits, lease agreements, or maintenance complaints! 🤖",
-          senderId: 'ai-bot',
-          receiverId: currentUser.id,
-          createdAt: new Date().toISOString()
-        }
-      ]);
+      Promise.resolve().then(() => {
+        setMessages([
+          {
+            id: 'welcome-ai',
+            text: "Hello! I am your RentApp AI Assistant. Ask me anything about paying rent, security deposits, lease agreements, or maintenance complaints! 🤖",
+            senderId: 'ai-bot',
+            receiverId: currentUser.id,
+            createdAt: new Date().toISOString()
+          }
+        ]);
+      });
       return;
     }
 

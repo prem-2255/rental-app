@@ -34,6 +34,104 @@ const PaymentsPage: React.FC = () => {
     loadPayments();
   }, []);
 
+  const downloadReceiptPdf = async (payment: Payment) => {
+    try {
+      const loadJsPdf = () => {
+        return new Promise((resolve) => {
+          if ((window as any).jspdf) {
+            resolve((window as any).jspdf);
+            return;
+          }
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+          script.onload = () => resolve((window as any).jspdf);
+          document.body.appendChild(script);
+        });
+      };
+
+      const jspdfModule: any = await loadJsPdf();
+      const { jsPDF } = jspdfModule;
+      const doc = new jsPDF();
+
+      // Top Header Card
+      doc.setFillColor(15, 23, 42); 
+      doc.rect(0, 0, 210, 40, 'F');
+
+      // Title
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(22);
+      doc.setFont("helvetica", "bold");
+      doc.text("RENTAPP TRANSACTION RECEIPT", 15, 26);
+
+      // Receipt details
+      doc.setTextColor(51, 65, 85);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Receipt Date: ${new Date().toLocaleDateString()}`, 145, 50);
+      doc.text(`Transaction ID: TXN-${payment.id.slice(0, 8).toUpperCase()}`, 15, 50);
+
+      // Divider line
+      doc.setDrawColor(226, 232, 240);
+      doc.line(15, 55, 195, 55);
+
+      // Details Table
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text("Billing & Payment Summary", 15, 68);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      
+      doc.text("Tenant Name:", 15, 82);
+      doc.setFont("helvetica", "bold");
+      doc.text("John Doe", 70, 82);
+      
+      doc.setFont("helvetica", "normal");
+      doc.text("Landlord / Owner Name:", 15, 94);
+      doc.setFont("helvetica", "bold");
+      doc.text("Mock Owner", 70, 94);
+      
+      doc.setFont("helvetica", "normal");
+      doc.text("Property Association:", 15, 106);
+      doc.setFont("helvetica", "bold");
+      doc.text("Sunset Villa", 70, 106);
+      
+      doc.setFont("helvetica", "normal");
+      doc.text("Reference Rent Month:", 15, 118);
+      doc.text(payment.date, 70, 118);
+
+      doc.text("Payment Classification:", 15, 130);
+      doc.setFont("helvetica", "bold");
+      doc.text(payment.type, 70, 130);
+
+      // Price highlight box
+      doc.setDrawColor(16, 185, 129);
+      doc.setFillColor(240, 253, 250);
+      doc.rect(15, 142, 180, 25, 'FD');
+
+      doc.setTextColor(21, 128, 61);
+      doc.setFontSize(13);
+      doc.setFont("helvetica", "bold");
+      doc.text("TRANSACTION SUCCESSFUL", 25, 158);
+      
+      doc.setFontSize(16);
+      doc.text(payment.amount, 145, 159);
+
+      // Security footer
+      doc.setTextColor(148, 163, 184);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "italic");
+      doc.text("This receipt is digitally audited by Razorpay secure checkout APIs and is legally binding.", 15, 192);
+      doc.text("No manual/physical signature is required.", 15, 198);
+
+      // Trigger download
+      doc.save(`Receipt-${payment.type}-${payment.id.slice(0, 6)}.pdf`);
+    } catch(err) {
+      console.error(err);
+      alert("Failed to render PDF receipt.");
+    }
+  };
+
   return (
     <div className="payments-page">
       <header className="page-header">
@@ -77,7 +175,7 @@ const PaymentsPage: React.FC = () => {
                   </div>
                   <button 
                     className="receipt-btn" 
-                    onClick={() => alert(`Receipt downloaded for transaction ID: ${payment.id}`)}
+                    onClick={() => downloadReceiptPdf(payment)}
                   >
                     📄 Receipt
                   </button>

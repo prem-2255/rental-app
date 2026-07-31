@@ -93,13 +93,17 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, onClose, 
         }
 
         .subscription-content {
-          background: white;
+          background: rgba(10, 22, 40, 0.95);
+          backdrop-filter: blur(32px);
+          -webkit-backdrop-filter: blur(32px);
+          border: 1px solid rgba(255, 255, 255, 0.12);
           width: 100%;
           max-width: 1000px;
           border-radius: 32px;
           padding: 3rem;
           position: relative;
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+          color: #ffffff;
+          box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.7);
           animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
@@ -107,8 +111,8 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, onClose, 
           position: absolute;
           top: 1.5rem;
           right: 1.5rem;
-          background: #f1f5f9;
-          border: none;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.12);
           width: 40px;
           height: 40px;
           border-radius: 50%;
@@ -118,12 +122,12 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, onClose, 
           justify-content: center;
           cursor: pointer;
           transition: all 0.2s;
-          color: #64748b;
+          color: var(--text-secondary);
         }
 
         .close-btn:hover {
-          background: #e2e8f0;
-          color: #0f172a;
+          background: rgba(255, 255, 255, 0.18);
+          color: #ffffff;
           transform: rotate(90deg);
         }
 
@@ -135,12 +139,12 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, onClose, 
         .sub-header h2 {
           font-size: 2.5rem;
           font-weight: 800;
-          color: #0f172a;
+          color: #ffffff;
           margin-bottom: 0.5rem;
         }
 
         .sub-header p {
-          color: #64748b;
+          color: var(--text-secondary);
           font-size: 1.125rem;
         }
 
@@ -153,24 +157,25 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, onClose, 
         .plan-card {
           padding: 2.5rem;
           border-radius: 24px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid rgba(255, 255, 255, 0.1);
           display: flex;
           flex-direction: column;
           transition: all 0.3s ease;
           position: relative;
-          background: #fff;
+          background: rgba(255, 255, 255, 0.04);
         }
 
         .plan-card.popular {
-          border-color: var(--plan-color);
-          box-shadow: 0 20px 40px -10px rgba(59, 130, 246, 0.2);
+          border-color: var(--aurora-green);
+          box-shadow: 0 0 35px rgba(0, 229, 160, 0.2);
           transform: scale(1.05);
           z-index: 1;
         }
 
         .plan-card:hover {
           transform: translateY(-8px);
-          box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.1);
+          border-color: var(--plan-color);
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
         }
 
         .popular-badge {
@@ -178,27 +183,28 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, onClose, 
           top: -12px;
           left: 50%;
           transform: translateX(-50%);
-          background: var(--plan-color);
-          color: white;
-          padding: 0.25rem 1rem;
+          background: linear-gradient(135deg, var(--aurora-green), var(--aurora-cyan));
+          color: var(--midnight);
+          padding: 0.35rem 1.25rem;
           border-radius: 99px;
           font-size: 0.75rem;
-          font-weight: 700;
+          font-weight: 800;
           text-transform: uppercase;
-          letter-spacing: 0.05em;
+          letter-spacing: 0.08em;
+          box-shadow: 0 0 20px rgba(0, 229, 160, 0.4);
         }
 
         .plan-name {
           font-size: 1.25rem;
           font-weight: 700;
-          color: #64748b;
+          color: var(--text-secondary);
           margin-bottom: 0.5rem;
         }
 
         .plan-price {
           font-size: 2.5rem;
           font-weight: 800;
-          color: #0f172a;
+          color: #ffffff;
           margin-bottom: 2rem;
         }
 
@@ -211,7 +217,7 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, onClose, 
 
         .plan-features li {
           margin-bottom: 1rem;
-          color: #475569;
+          color: var(--text-primary);
           font-size: 1rem;
           display: flex;
           align-items: center;
@@ -219,26 +225,27 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, onClose, 
         }
 
         .plan-features li span {
-          color: var(--plan-color);
+          color: var(--aurora-green);
           font-weight: 900;
         }
 
         .select-plan-btn {
           width: 100%;
           padding: 1rem;
-          border-radius: 12px;
-          border: 2px solid #e2e8f0;
-          background: transparent;
-          color: #0f172a;
+          border-radius: 14px;
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          background: rgba(255, 255, 255, 0.08);
+          color: #ffffff;
           font-weight: 700;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: all 0.25s ease;
         }
 
         .plan-card.popular .select-plan-btn {
-          background: var(--plan-color);
-          border-color: var(--plan-color);
-          color: white;
+          background: linear-gradient(135deg, var(--aurora-green), var(--aurora-cyan));
+          border: none;
+          color: var(--midnight);
+          font-weight: 800;
         }
 
         .plan-card:hover .select-plan-btn {

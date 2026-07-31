@@ -30,6 +30,11 @@ model User {
   agreement   TenantAgreement?
   bookingRequests BookingRequest[] @relation("CustomerToBooking")
   visitors    Visitor[]
+
+  savedProperties String?
+  checklistTenant String?
+  checklistOwner  String?
+  splitRent       String?
 }
 
 model Property {
@@ -65,6 +70,17 @@ model Property {
   
   bookingRequests BookingRequest[]
   inventory       InventoryItem[]
+
+  houseRules          String?
+  nearbyPlaces        String?
+  safetyCctv          Boolean @default(false)
+  safetySecurityGuard Boolean @default(false)
+  safetyGated         Boolean @default(false)
+  safetyFire          Boolean @default(false)
+  safetyLighting      Boolean @default(false)
+  responseTime        String? @default("Replies within 10 minutes")
+  visitDate           String?
+  visitTime           String?
 }
 
 model TenantDocument {
@@ -86,6 +102,7 @@ model TenantMaintenance {
   resolutionNotes String?
   tenantId        String
   tenant          User     @relation(fields: [tenantId], references: [id])
+  photo           String?
 }
 
 model TenantElectricity {
@@ -182,4 +199,10 @@ model Review {
   targetId   String
   targetType String   // 'Property', 'User'
   createdAt  DateTime @default(now())
+
+  cleanliness        Int @default(5)
+  location           Int @default(5)
+  safety             Int @default(5)
+  valueForMoney      Int @default(5)
+  ownerCommunication Int @default(5)
 }

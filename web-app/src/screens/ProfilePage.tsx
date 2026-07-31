@@ -95,6 +95,14 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userRole, onLogout }) => {
             <h3>Account Settings</h3>
             <div className="settings-list">
               <div className="setting-item">
+                <div className="setting-label">Customer Portal</div>
+                <button className="setting-action" onClick={() => navigate('/customer')}>Go</button>
+              </div>
+              <div className="setting-item">
+                <div className="setting-label">Owner Portal</div>
+                <button className="setting-action" onClick={() => navigate('/owner')}>Go</button>
+              </div>
+              <div className="setting-item">
                 <div className="setting-label">Change Password</div>
                 <button className="setting-action">Update</button>
               </div>

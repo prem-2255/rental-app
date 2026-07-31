@@ -15,10 +15,6 @@ const AdminDashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'properties'>('overview');
 
-  useEffect(() => {
-    fetchStatsAndUsers();
-  }, []);
-
   const fetchStatsAndUsers = async () => {
     try {
       setLoading(true);
@@ -35,12 +31,16 @@ const AdminDashboardPage: React.FC = () => {
       setStats(statsData);
       setUsers(usersData);
       setProperties(propertiesData);
-      setLoading(false);
     } catch (err) {
-      console.error('Error fetching admin data:', err);
+      console.error('Admin fetch error:', err);
+    } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchStatsAndUsers();
+  }, []);
 
   const handleToggleBlockUser = async (userId: string) => {
     try {

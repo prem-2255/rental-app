@@ -14,6 +14,7 @@ export interface Property {
   ownerId?: string;
   tenantId?: string;
   ownerPhone?: string;
+  status?: string;
 }
 
 export interface TenantDocument {

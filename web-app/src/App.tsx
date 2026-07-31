@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate } from 'react-router-dom';
 import './App.css';
 import LoginModal from './components/LoginModal';
 import type { UserRole, Property, SubscriptionPlan } from './types';
-import FeatureGrid from './components/FeatureGrid';
+import _FeatureGrid from './components/FeatureGrid';
 import BookingPage from './screens/BookingPage';
 import RentPaymentPage from './screens/RentPaymentPage';
 import ElectricityPage from './screens/ElectricityPage';
@@ -23,109 +23,242 @@ import OwnerPropertiesPage from './screens/OwnerPropertiesPage';
 import CustomerVisitorsPage from './screens/CustomerVisitorsPage';
 import CustomerInventoryPage from './screens/CustomerInventoryPage';
 import AdminDashboardPage from './screens/AdminDashboardPage';
+import SubscriptionModal from './components/SubscriptionModal';
+
+import SavedPropertiesPage from './screens/SavedPropertiesPage';
+import PropertyComparisonPage from './screens/PropertyComparisonPage';
+import SplitRentPage from './screens/SplitRentPage';
+import MoveInChecklistPage from './screens/MoveInChecklistPage';
 
 import * as Placeholders from './screens/PlaceholderPages';
 import BroadcastPage from './screens/BroadcastPage';
 import RealtimeChatWidget from './components/RealtimeChatWidget';
 import { connectSocket, disconnectSocket, getSocket } from './socketService';
 
-interface Feature {
-  id: string;
-  title: string;
-  icon: string | React.ReactNode;
-  color: string;
-  bgColor: string;
-  path: string;
-}
+// Dashboard configurations are managed dynamically per view
 
-interface DashboardConfig {
-  id: string;
-  type: UserRole;
-  title: string;
-  description: string;
-  buttonText: string;
-  cssClass: string;
-  features?: Feature[];
-}
+function CustomerDashboard({ userRole: _userRole, userPlan }: { userRole: UserRole | null, userPlan: SubscriptionPlan }) {
+  const navigate = useNavigate();
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [rentedProperty, setRentedProperty] = useState<any>(null);
+  const [_loading, setLoading] = useState(true);
+  const [visits, setVisits] = useState<any[]>([]);
+  const [activeMaintenance, setActiveMaintenance] = useState<any[]>([]);
+  const [savedCount, setSavedCount] = useState(0);
 
-const dashboards: DashboardConfig[] = [
-  {
-    id: 'customer',
-    type: 'customer',
-    title: 'Customer Dashboard',
-    description: 'Find your next home, pay rent seamlessly, and manage your stay directly from your personalized tenant space.',
-    buttonText: 'Go to Tenant Portal',
-    cssClass: 'section-customer',
-    features: [
-      { id: 'c1', icon: '🏠', title: 'Book Rental', color: '#F59E0B', bgColor: '#FFFAF0', path: '/book-rental' },
-      { id: 'c2', icon: '📄', title: 'My Documents', color: '#3B82F6', bgColor: '#F0F9FF', path: '/documents' },
-      { id: 'c3', icon: '💳', title: 'Pay Rent', color: '#EA580C', bgColor: '#FFF7ED', path: '/pay-rent' },
-      { id: 'c4', icon: '⚡', title: 'Electricity', color: '#FBBF24', bgColor: '#FEFCE8', path: '/electricity' },
-      { id: 'c5', icon: '🔄', title: 'Agreement', color: '#8B5CF6', bgColor: '#F5F3FF', path: '/agreement' },
-      { id: 'c6', icon: '🛠️', title: 'Maintenance Hub', color: '#0D9488', bgColor: '#F0FDFA', path: '/maintenance' },
-      { id: 'c7', icon: '📋', title: 'My Bookings', color: '#10B981', bgColor: '#D1FAE5', path: '/customer/bookings' },
-      { id: 'c8', icon: '🎫', title: 'Visitor Passes', color: '#EC4899', bgColor: '#FDF2F8', path: '/customer/visitors' },
-      { id: 'c9', icon: '📦', title: 'Inventory List', color: '#0EA5E9', bgColor: '#F0F9FF', path: '/customer/inventory' },
-    ]
-  },
-  {
-    id: 'owner',
-    type: 'owner',
-    title: 'Owner Dashboard',
-    description: 'Manage your properties, add new listings, and oversee your rental portfolio with streamlined management tools.',
-    buttonText: 'Go to Owner Portal',
-    cssClass: 'section-owner',
-    features: [
-      { id: 'o1', icon: '🏢', title: 'Your Properties', color: '#4F46E5', bgColor: '#EEF2FF', path: '/owner/properties' },
-      { id: 'o2', icon: '➕', title: 'Add Property', color: '#6366F1', bgColor: '#F5F3FF', path: '/owner/add-property' },
-      { id: 'o3', icon: '👨‍👩‍👧‍👦', title: 'Tenant List', color: '#EC4899', bgColor: '#FDF2F8', path: '/owner/tenants' },
-      { id: 'o4', icon: '📢', title: 'Broadcast', color: '#F97316', bgColor: '#FFF7ED', path: '/owner/broadcast' },
-      { id: 'o5', icon: '📝', title: 'Booking Requests', color: '#10B981', bgColor: '#D1FAE5', path: '/owner/bookings' },
-    ]
+  useEffect(() => {
+    const stored = localStorage.getItem('currentUser');
+    if (stored) {
+      const u = JSON.parse(stored);
+      setCurrentUser(u);
+      loadTenantData(u.id);
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadTenantData = async (uid: string) => {
+    try {
+      const res = await fetch(`/api/tenants/${uid}`);
+      const data = await res.json();
+      if (data) {
+        if (data.propertyId) {
+          const propRes = await fetch('/api/properties');
+          const allProps = await propRes.json();
+          const p = allProps.find((x: any) => x.id === data.propertyId);
+          if (p) {
+            setRentedProperty(p);
+            if (p.visitDate) {
+              setVisits([{
+                date: p.visitDate,
+                time: p.visitTime || "11:00 AM",
+                property: p.title,
+                ownerContact: "+91 99887 76655",
+                location: p.location
+              }]);
+            }
+          }
+        }
+        
+        if (Array.isArray(data.maintenance)) {
+          setActiveMaintenance(data.maintenance.filter((m: any) => m.status !== 'Resolved' && m.status !== 'Closed'));
+        }
+        
+        if (data.savedProperties) {
+          setSavedCount(data.savedProperties.split(',').filter(Boolean).length);
+        }
+      }
+    } catch(err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Mock countdown - say 5 days left (Yellow)
+  const daysUntilDue = 5;
+  let countdownClass = 'green';
+  const countdownText = `Rent Due in ${daysUntilDue} Days`;
+  if (daysUntilDue < 3) {
+    countdownClass = 'red';
+  } else if (daysUntilDue <= 7) {
+    countdownClass = 'yellow';
   }
-];
 
-function CustomerDashboard({ userRole, userPlan }: { userRole: UserRole | null, userPlan: SubscriptionPlan }) {
-  const dashboard = dashboards.find(d => d.id === 'customer')!;
-  
-  // Basic: Book Rental (c1), Documents (c2)
-  // Premium: Basic + Pay Rent (c3), Electricity (c4), Maintenance (c6)
-  // Elite: All + Agreement (c5)
-  const filteredFeatures = dashboard.features?.filter(f => {
-    if (userPlan === 'elite') return true;
-    if (userPlan === 'premium') return ['c1', 'c2', 'c3', 'c4', 'c6', 'c7', 'c8', 'c9'].includes(f.id);
-    return ['c1', 'c2', 'c7', 'c8', 'c9'].includes(f.id);
-  });
+  const handleQuickAction = (action: string) => {
+    if (action === 'pay') navigate('/pay-rent');
+    else if (action === 'issue') navigate('/maintenance');
+    else if (action === 'agreement') navigate('/agreement');
+    else if (action === 'contact') {
+      alert("📞 Owner Contact: +91 99887 76655\nEmail: owner@rentapp.com\nOpening chat portal...");
+      const chatWidget = document.querySelector('.chat-widget-toggle') as HTMLElement;
+      if (chatWidget) chatWidget.click();
+    }
+    else if (action === 'saved') navigate('/saved-properties');
+    else if (action === 'compare') navigate('/compare');
+    else if (action === 'split') navigate('/split-rent');
+    else if (action === 'checklist') navigate('/checklist');
+  };
 
   return (
     <main className="main-content">
-      <section id={dashboard.id} className={`dashboard-section ${dashboard.cssClass}`}>
+      <section className="dashboard-section section-customer">
         <div className="bg-circle circle-1"></div>
         <div className="bg-circle circle-2"></div>
         <div className="bg-circle circle-3"></div>
         
-        <div className="background-house-wrapper">
-          <div className="house-shadow-circle"></div>
-          <img 
-            src="https://images.unsplash.com/photo-1512917774080-9991f1c4c750?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" 
-            alt="Prem's House" 
-            className="background-house-img"
-          />
-        </div>
-        
-        <div className="dashboard-content">
-          <h1 className="dashboard-title">
-            {dashboard.title} 
-            {userRole && <span style={{ fontSize: '1rem', verticalAlign: 'middle', marginLeft: '1rem', opacity: 0.8 }}>(Plan: {userPlan})</span>}
-          </h1>
-          <p className="dashboard-description">{dashboard.description}</p>
-          
-          {filteredFeatures && (
-            <FeatureGrid features={filteredFeatures} />
-          )}
-          
-          <div style={{ marginTop: '3rem' }}>
-            <button className="action-button">{dashboard.buttonText}</button>
+        <div className="dashboard-content modern-dashboard">
+          <div className="welcome-header">
+            <h1 className="dashboard-title">Welcome Back, {currentUser?.name || 'Tenant'} 👋</h1>
+            <p className="plan-info">Plan: <span className="plan-badge">{userPlan.toUpperCase()}</span></p>
+          </div>
+
+          <div className="dashboard-grid">
+            {/* Left Column: Quick Actions & Countdown */}
+            <div className="left-column">
+              {/* Countdown card */}
+              <div className={`countdown-card ${countdownClass}`}>
+                <div className="countdown-bell">🔔</div>
+                <div className="countdown-details">
+                  <h3>{countdownText}</h3>
+                  <p>Pay before the due date to avoid late fees.</p>
+                </div>
+                <button className="pay-inline-btn" onClick={() => navigate('/pay-rent')}>Pay Now</button>
+              </div>
+
+              {/* Quick Actions Grid */}
+              <div className="quick-actions-card card">
+                <h3>Quick Actions</h3>
+                <div className="actions-grid">
+                  <button className="qa-btn" onClick={() => handleQuickAction('pay')}>
+                    <span className="qa-icon">💳</span>
+                    <span className="qa-label">Pay Rent</span>
+                  </button>
+                  <button className="qa-btn" onClick={() => handleQuickAction('issue')}>
+                    <span className="qa-icon">🛠️</span>
+                    <span className="qa-label">Report Issue</span>
+                  </button>
+                  <button className="qa-btn" onClick={() => handleQuickAction('agreement')}>
+                    <span className="qa-icon">📜</span>
+                    <span className="qa-label">Agreement</span>
+                  </button>
+                  <button className="qa-btn" onClick={() => handleQuickAction('contact')}>
+                    <span className="qa-icon">📞</span>
+                    <span className="qa-label">Contact Owner</span>
+                  </button>
+                  <button className="qa-btn" onClick={() => handleQuickAction('saved')}>
+                    <span className="qa-icon">❤️</span>
+                    <span className="qa-label">Saved ({savedCount})</span>
+                  </button>
+                  <button className="qa-btn" onClick={() => handleQuickAction('compare')}>
+                    <span className="qa-icon">⚖️</span>
+                    <span className="qa-label">Compare</span>
+                  </button>
+                  <button className="qa-btn" onClick={() => handleQuickAction('split')}>
+                    <span className="qa-icon">✂️</span>
+                    <span className="qa-label">Split Rent</span>
+                  </button>
+                  <button className="qa-btn" onClick={() => handleQuickAction('checklist')}>
+                    <span className="qa-icon">📋</span>
+                    <span className="qa-label">Checklist</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Upcoming Visit card */}
+              <div className="visit-card card">
+                <h3>Upcoming Visit Reminders</h3>
+                {visits.length === 0 ? (
+                  <div className="empty-substate">No visits scheduled.</div>
+                ) : (
+                  visits.map((v, i) => (
+                    <div key={i} className="visit-item">
+                      <div className="visit-meta">
+                        <span className="visit-date">📅 {v.date}</span>
+                        <span className="visit-time">⏰ {v.time}</span>
+                      </div>
+                      <div className="visit-prop">Property: <strong>{v.property}</strong></div>
+                      <div className="visit-contact">Owner Contact: {v.ownerContact}</div>
+                      <a 
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.location)}`} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="nav-btn"
+                      >
+                        🧭 Navigate Directions
+                      </a>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Right Column: Rented Property & Maintenance */}
+            <div className="right-column">
+              {/* Rented Property Info */}
+              <div className="rented-property-card card">
+                <h3>Rented Property</h3>
+                {!rentedProperty ? (
+                  <div className="empty-substate">
+                    <span className="empty-icon">🏠</span>
+                    <p>You have not rented any properties yet.</p>
+                    <button className="explore-btn" onClick={() => navigate('/book-rental')}>Find a Home</button>
+                  </div>
+                ) : (
+                  <div className="rented-prop-details">
+                    <img src={rentedProperty.image} alt={rentedProperty.title} className="rented-prop-img" />
+                    <div className="rented-info">
+                      <h4>{rentedProperty.title}</h4>
+                      <p className="loc">📍 {rentedProperty.location}</p>
+                      <div className="specs">
+                        <span>🛏️ {rentedProperty.beds} BHK</span>
+                        <span>🚿 {rentedProperty.baths} Baths</span>
+                        <span>Rent: <strong>{rentedProperty.price}</strong>/mo</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Active Maintenance */}
+              <div className="maintenance-status-card card">
+                <h3>Active Maintenance Requests</h3>
+                {activeMaintenance.length === 0 ? (
+                  <div className="empty-substate">No active maintenance issues. Great!</div>
+                ) : (
+                  <div className="active-maintenance-list">
+                    {activeMaintenance.map((m, i) => (
+                      <div key={i} className="maintenance-item-strip">
+                        <span className="category">🛠️ {m.type}</span>
+                        <span className={`status-badge ${m.status.toLowerCase()}`}>{m.status}</span>
+                        <p className="desc">{m.description}</p>
+                        <span className="date">Reported: {m.date}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -133,9 +266,10 @@ function CustomerDashboard({ userRole, userPlan }: { userRole: UserRole | null, 
   );
 }
 
-function OwnerDashboard({ userRole, userPlan, currentUser }: { userRole: UserRole | null, userPlan: SubscriptionPlan, currentUser: any }) {
-  const dashboard = dashboards.find(d => d.id === 'owner')!;
+function OwnerDashboard({ userRole: _userRole, userPlan, currentUser, onSetPlan }: { userRole: UserRole | null, userPlan: SubscriptionPlan, currentUser: any, onSetPlan: (plan: SubscriptionPlan) => void }) {
+  const navigate = useNavigate();
   const [stats, setStats] = useState<any>(null);
+  const [isSubModalOpen, setIsSubModalOpen] = useState(false);
 
   useEffect(() => {
     if (currentUser?.id) {
@@ -146,46 +280,139 @@ function OwnerDashboard({ userRole, userPlan, currentUser }: { userRole: UserRol
     }
   }, [currentUser]);
 
-  const filteredFeatures = dashboard.features;
+  const handleQuickAction = (action: string) => {
+    if (action === 'add') navigate('/owner/add-property');
+    else if (action === 'bookings') navigate('/owner/bookings');
+    else if (action === 'collect') {
+      alert("🔔 Rent demand sent to all active tenants. Payment gateways updated.");
+    }
+    else if (action === 'manage') navigate('/owner/properties');
+    else if (action === 'checklist') navigate('/checklist');
+  };
 
   return (
     <main className="main-content">
-      <section id={dashboard.id} className={`dashboard-section ${dashboard.cssClass}`}>
+      <section className="dashboard-section section-owner">
         <div className="bg-circle circle-1"></div>
         <div className="bg-circle circle-2"></div>
         <div className="bg-circle circle-3"></div>
         
-        <div className="dashboard-content">
-          <h1 className="dashboard-title">
-            {dashboard.title} 
-            {userRole && <span style={{ fontSize: '1rem', verticalAlign: 'middle', marginLeft: '1rem', opacity: 0.8 }}>(Plan: {userPlan})</span>}
-          </h1>
-          <p className="dashboard-description">{dashboard.description}</p>
+        <div className="dashboard-content modern-dashboard">
+          <div className="welcome-header">
+            <h1 className="dashboard-title">Owner Control Center 🏢</h1>
+            <div className="plan-section">
+              Plan Level: <span className="plan-badge owner">{userPlan.toUpperCase()}</span>
+              <button onClick={() => setIsSubModalOpen(true)} className="upgrade-inline-btn">Upgrade Plan</button>
+            </div>
+          </div>
 
-          {stats && (
-            <div className="owner-stats-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(10px)', padding: '1.5rem', borderRadius: '20px', marginBottom: '2rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-              <div>
-                <span style={{ fontSize: '0.8rem', opacity: 0.8, textTransform: 'uppercase' }}>Volume/Income</span>
-                <h3 style={{ fontSize: '1.5rem', margin: '0.25rem 0 0' }}>{stats.monthlyIncome}</h3>
+          {stats ? (
+            <div className="stats-dashboard-grid">
+              <div className="stat-card shadow-card bg-indigo">
+                <span className="icon">🏢</span>
+                <div className="details">
+                  <span className="label">Total Properties</span>
+                  <span className="val">{stats.totalProperties}</span>
+                </div>
               </div>
-              <div>
-                <span style={{ fontSize: '0.8rem', opacity: 0.8, textTransform: 'uppercase' }}>Listed / Occupied</span>
-                <h3 style={{ fontSize: '1.5rem', margin: '0.25rem 0 0' }}>{stats.totalProperties} / {stats.occupiedProperties}</h3>
+              <div className="stat-card shadow-card bg-emerald">
+                <span className="icon">👨‍👩‍👧‍👦</span>
+                <div className="details">
+                  <span className="label">Occupied Listings</span>
+                  <span className="val">{stats.occupiedProperties}</span>
+                </div>
               </div>
-              <div>
-                <span style={{ fontSize: '0.8rem', opacity: 0.8, textTransform: 'uppercase' }}>Booking Requests</span>
-                <h3 style={{ fontSize: '1.5rem', margin: '0.25rem 0 0' }}>{stats.bookingRequests} Pending</h3>
+              <div className="stat-card shadow-card bg-amber">
+                <span className="icon">🔓</span>
+                <div className="details">
+                  <span className="label">Vacant Listings</span>
+                  <span className="val">{stats.vacantProperties}</span>
+                </div>
               </div>
-              <div>
-                <span style={{ fontSize: '0.8rem', opacity: 0.8, textTransform: 'uppercase' }}>Maintenance</span>
-                <h3 style={{ fontSize: '1.5rem', margin: '0.25rem 0 0' }}>{stats.maintenanceRequests} Open</h3>
+              <div className="stat-card shadow-card bg-teal">
+                <span className="icon">💵</span>
+                <div className="details">
+                  <span className="label">Monthly Rental Income</span>
+                  <span className="val">{stats.monthlyIncome}</span>
+                </div>
               </div>
             </div>
+          ) : (
+            <div className="loading-stats">Loading dashboard stats...</div>
           )}
 
-          {filteredFeatures && (
-            <FeatureGrid features={filteredFeatures} />
-          )}
+          <div className="owner-layout-grid">
+            {/* Left Block: Notifications & Requests */}
+            <div className="stats-column">
+              <div className="card shadow-card">
+                <h3>Pending Tasks & Action Items</h3>
+                {stats && (
+                  <div className="action-items-list">
+                    <div className="action-item-strip pointer" onClick={() => navigate('/owner/bookings')}>
+                      <span className="bullet request">⏱️</span>
+                      <div className="details">
+                        <strong>New Booking Requests</strong>
+                        <p>You have {stats.bookingRequests} booking requests waiting for approval.</p>
+                      </div>
+                    </div>
+                    <div className="action-item-strip pointer" onClick={() => navigate('/owner/tenants')}>
+                      <span className="bullet payment">💳</span>
+                      <div className="details">
+                        <strong>Pending Rent Payments</strong>
+                        <p>2 tenants have outstanding balances for this month.</p>
+                      </div>
+                    </div>
+                    <div className="action-item-strip pointer" onClick={() => navigate('/owner/tenants')}>
+                      <span className="bullet maintenance">🛠️</span>
+                      <div className="details">
+                        <strong>Active Maintenance Issues</strong>
+                        <p>You have {stats.maintenanceRequests} unresolved repair requests from tenants.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Block: Owner quick actions */}
+            <div className="actions-column">
+              <div className="card shadow-card">
+                <h3>Quick Controls</h3>
+                <div className="owner-actions-grid">
+                  <button className="qa-btn owner" onClick={() => handleQuickAction('add')}>
+                    <span className="qa-icon">🏢</span>
+                    <span className="qa-label">Add Property</span>
+                  </button>
+                  <button className="qa-btn owner" onClick={() => handleQuickAction('bookings')}>
+                    <span className="qa-icon">📝</span>
+                    <span className="qa-label">View Bookings</span>
+                  </button>
+                  <button className="qa-btn owner" onClick={() => handleQuickAction('collect')}>
+                    <span className="qa-icon">💰</span>
+                    <span className="qa-label">Collect Rent</span>
+                  </button>
+                  <button className="qa-btn owner" onClick={() => handleQuickAction('manage')}>
+                    <span className="qa-icon">⚙️</span>
+                    <span className="qa-label">Manage Properties</span>
+                  </button>
+                  <button className="qa-btn owner" onClick={() => handleQuickAction('checklist')}>
+                    <span className="qa-icon">📋</span>
+                    <span className="qa-label">Move-In Checklist</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <SubscriptionModal 
+            isOpen={isSubModalOpen}
+            onClose={() => setIsSubModalOpen(false)}
+            onSelectPlan={(plan) => {
+              onSetPlan(plan.id as SubscriptionPlan);
+              alert(`You selected the ${plan.name} plan! Features have been updated.`);
+              setIsSubModalOpen(false);
+            }}
+          />
         </div>
       </section>
     </main>
@@ -218,24 +445,31 @@ function ProtectedRoute({
 
 function App() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [userRole, setUserRole] = useState<UserRole | null>(null);
-  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [currentUser, setCurrentUser] = useState<any | null>(() => {
+    const storedUser = localStorage.getItem('currentUser');
+    if (storedUser) {
+      try { return JSON.parse(storedUser); } catch { return null; }
+    }
+    return null;
+  });
+  const [userRole, setUserRole] = useState<UserRole | null>(() => {
+    const storedUser = localStorage.getItem('currentUser');
+    if (storedUser) {
+      try {
+        const u = JSON.parse(storedUser);
+        return u.role === 'tenant' ? 'customer' : u.role;
+      } catch { return null; }
+    }
+    return null;
+  });
   const [userPlan, setUserPlan] = useState<SubscriptionPlan>('basic');
   const [properties, setProperties] = useState<Property[]>([]);
   const [liveNotification, setLiveNotification] = useState<{ id: string; title: string; text: string; date: string } | null>(null);
 
   // Restore session on mount
   useEffect(() => {
-    const storedUser = localStorage.getItem('currentUser');
-    if (storedUser) {
-      try {
-        const user = JSON.parse(storedUser);
-        setCurrentUser(user);
-        setUserRole(user.role === 'tenant' ? 'customer' : user.role);
-        connectSocket(user.id);
-      } catch (err) {
-        console.error('Failed to parse stored user:', err);
-      }
+    if (currentUser?.id) {
+      connectSocket(currentUser.id);
     }
 
     fetch('/api/properties')
@@ -246,7 +480,7 @@ function App() {
         }
       })
       .catch(err => console.error("Failed to load properties:", err));
-  }, []);
+  }, [currentUser?.id]);
 
   // Set up socket listener for live broadcasts
   useEffect(() => {
@@ -294,30 +528,23 @@ function App() {
         <header className="app-header">
           <Link to="/" className="logo">
             <div className="logo-visual">
-              <svg className="logo-house float-letter" style={{ animationDelay: '0s' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 12l9-9 9 9"></path>
-                <path d="M5 12v10h14V12"></path>
-                <path d="M9 22v-6h6v6"></path>
-                <path d="M17 7V4h2v5"></path>
-              </svg>
-              <span className="logo-text">
-                {'rentapp'.split('').map((char, index) => (
-                  <span key={index} className="float-letter" style={{ animationDelay: `${(index + 1) * 0.1}s` }}>
-                    {char}
-                  </span>
-                ))}
-              </span>
+              <div className="logo-icon-badge">
+                <svg className="logo-house" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12l9-9 9 9"></path>
+                  <path d="M5 12v10h14V12"></path>
+                  <path d="M9 22v-6h6v6"></path>
+                  <path d="M17 7V4h2v5"></path>
+                </svg>
+              </div>
+              <div className="logo-text-wrap">
+                <span>Rent</span><span className="logo-accent">App</span>
+              </div>
             </div>
           </Link>
           <nav className="app-nav">
             <Link to="/" className="nav-link">Home</Link>
-            {userRole === 'admin' ? (
+            {userRole === 'admin' && (
               <Link to="/admin" className="nav-link" style={{ color: '#ea580c', fontWeight: 700 }}>Admin Console</Link>
-            ) : (
-              <>
-                <Link to="/customer" className="nav-link">Customer</Link>
-                <Link to="/owner" className="nav-link">Owner</Link>
-              </>
             )}
             <Link to="/profile" className="nav-link">Profile</Link>
           </nav>
@@ -393,10 +620,23 @@ function App() {
             </ProtectedRoute>
           } />
 
+          <Route path="/saved-properties" element={
+            <ProtectedRoute userRole={userRole} requiredRole="customer" onOpenLogin={openLogin}>
+              <SavedPropertiesPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/compare" element={<PropertyComparisonPage />} />
+          <Route path="/split-rent" element={
+            <ProtectedRoute userRole={userRole} requiredRole="customer" onOpenLogin={openLogin}>
+              <SplitRentPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/checklist" element={<MoveInChecklistPage />} />
+
           {/* Owner Routes */}
           <Route path="/owner" element={
             <ProtectedRoute userRole={userRole} requiredRole="owner" onOpenLogin={openLogin}>
-              <OwnerDashboard userRole={userRole} userPlan={userPlan} currentUser={currentUser} />
+              <OwnerDashboard userRole={userRole} userPlan={userPlan} currentUser={currentUser} onSetPlan={setUserPlan} />
             </ProtectedRoute>
           } />
           <Route path="/admin" element={

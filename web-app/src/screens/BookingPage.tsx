@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Property } from '../types';
 
@@ -16,18 +16,79 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) =>
   const [selectedProperty, setSelectedProperty] = useState<any | null>(null);
   const [isBookingConfirmed, setIsBookingConfirmed] = useState(false);
   const [visitDate, setVisitDate] = useState('');
+  
+  // Custom enhanced states
+  const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [compareBucket, setCompareBucket] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      loadSavedIds(currentUser.id);
+    }
+  }, [currentUser]);
+
+  const loadSavedIds = async (uid: string) => {
+    try {
+      const res = await fetch(`/api/tenants/${uid}`);
+      const tenant = await res.json();
+      if (tenant && tenant.savedProperties) {
+        setSavedIds(tenant.savedProperties.split(',').filter(Boolean));
+      }
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
+  const handleToggleFavorite = async (propertyId: string) => {
+    if (!currentUser) {
+      alert("Please log in to save properties.");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/users/${currentUser.id}/favorites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ propertyId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSavedIds(data.savedProperties ? data.savedProperties.split(',').filter(Boolean) : []);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleToggleCompare = (propertyId: string) => {
+    if (compareBucket.includes(propertyId)) {
+      setCompareBucket(prev => prev.filter(x => x !== propertyId));
+    } else {
+      if (compareBucket.length >= 3) {
+        alert("You can select up to 3 properties for comparison.");
+        return;
+      }
+      setCompareBucket(prev => [...prev, propertyId]);
+    }
+  };
 
   const handleBookNow = (property: Property) => {
+    // Enrich property fields for high fidelity display
     setSelectedProperty({
       ...property,
-      deposit: '₹12,000',
-      maintenance: '₹1,200',
-      suitability: 'Family / Bachelors',
-      furnishedStatus: 'Semi-Furnished',
-      parking: true,
-      petFriendly: true,
-      amenities: 'Wi-Fi, AC, Lift, CCTV, Parking',
-      nearby: 'Metro Station (0.5km), Apex Global School (1.2km), City Hospital (2km)'
+      deposit: (property as any).deposit || '₹10,000',
+      maintenance: (property as any).maintenance || '₹1,000',
+      suitability: (property as any).suitability || 'Family / Bachelors',
+      furnishedStatus: (property as any).furnishedStatus || 'Semi-Furnished',
+      parking: (property as any).parking ?? true,
+      houseRules: (property as any).houseRules || 'No Smoking, No Pets, Quiet Hours after 10 PM, Gated Parking, Visitor Check-in Required',
+      nearbyPlaces: (property as any).nearbyPlaces || 'Grocery Store (0.3km), Apex Hospital (1.2km), Pharmacy (0.2km), ATM (0.1km), Bus Stop (0.4km), Metro Station (0.6km), Gym (0.5km), School (1.0km)',
+      safetyCctv: (property as any).safetyCctv ?? true,
+      safetySecurityGuard: (property as any).safetySecurityGuard ?? true,
+      safetyGated: (property as any).safetyGated ?? true,
+      safetyFire: (property as any).safetyFire ?? true,
+      safetyLighting: (property as any).safetyLighting ?? true,
+      responseTime: (property as any).responseTime || 'Replies within 10 minutes',
+      ownerPhone: (property as any).ownerPhone || '+91 99887 76655'
     });
     setIsBookingConfirmed(false);
   };
@@ -88,59 +149,6 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) =>
 
   return (
     <div className="booking-page">
-      <style>{`
-        .ai-search-toggle {
-          background: #eff6ff;
-          border: 1px solid #bfdbfe;
-          color: #1e40af;
-          padding: 0.5rem 1rem;
-          border-radius: 99px;
-          font-size: 0.8rem;
-          font-weight: 700;
-          cursor: pointer;
-          margin-bottom: 1rem;
-          display: inline-flex;
-          align-items: center;
-          gap: 0.5rem;
-          transition: all 0.2s;
-        }
-        .ai-search-toggle.active {
-          background: #2563eb;
-          color: white;
-          border-color: #2563eb;
-        }
-        .ai-badge-indicator {
-          background: #3b82f6;
-          color: white;
-          font-size: 0.65rem;
-          padding: 0.15rem 0.4rem;
-          border-radius: 4px;
-          font-weight: 800;
-        }
-        .visit-date-selector {
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 1rem;
-          margin-top: 1rem;
-        }
-        .visit-date-selector label {
-          font-weight: 700;
-          font-size: 0.75rem;
-          text-transform: uppercase;
-          color: #475569;
-          margin-bottom: 0.5rem;
-          display: block;
-        }
-        .visit-date-input {
-          width: 100%;
-          padding: 0.75rem;
-          border: 1px solid #cbd5e1;
-          border-radius: 8px;
-          outline: none;
-        }
-      `}</style>
-
       <header className="booking-header">
         <button onClick={() => navigate('/')} className="back-button">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -170,7 +178,6 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) =>
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
-              if (!isAiSearch) return;
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSearchSubmit();
@@ -188,31 +195,60 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) =>
       </div>
 
       <div className="property-grid">
-        {propertiesToRender.map(property => (
-          <div key={property.id} className="property-card-alt">
-            <div className="property-image-wrapper">
-              <img src={property.image} alt={property.title} />
-              <div className="property-tag">{property.type}</div>
-            </div>
-            <div className="property-details">
-              <div className="property-price">{property.price}</div>
-              <h3 className="property-title">{property.title}</h3>
-              <p className="property-location">{property.location}</p>
-              <div className="property-info">
-                <span>🛏️ {property.beds} Beds</span>
-                <span>🚿 {property.baths} Baths</span>
-                {property.capacity && <span>👥 Max {property.capacity}</span>}
+        {propertiesToRender.map(property => {
+          const isSaved = savedIds.includes(property.id);
+          const isComparing = compareBucket.includes(property.id);
+          const propStatus = property.status || 'Available Now';
+          
+          return (
+            <div key={property.id} className="property-card-alt">
+              <div className="property-image-wrapper">
+                <img src={property.image} alt={property.title} />
+                <button 
+                  className={`heart-icon-btn ${isSaved ? 'active' : ''}`}
+                  onClick={(e) => { e.stopPropagation(); handleToggleFavorite(property.id); }}
+                >
+                  {isSaved ? '❤️' : '🤍'}
+                </button>
+                <div className={`status-badge-pill ${propStatus.toLowerCase().replace(' ', '-')}`}>
+                  {propStatus}
+                </div>
               </div>
-              <button 
-                className="book-now-btn"
-                onClick={() => handleBookNow(property)}
-              >
-                Book Now
-              </button>
+              <div className="property-details">
+                <div className="property-price">{property.price}</div>
+                <h3 className="property-title">{property.title}</h3>
+                <p className="property-location">📍 {property.location}</p>
+                <div className="property-info">
+                  <span>🛏️ {property.beds} Beds</span>
+                  <span>🚿 {property.baths} Baths</span>
+                </div>
+                
+                <div className="action-buttons-row">
+                  <button className="book-now-btn" onClick={() => handleBookNow(property)}>
+                    View & Book
+                  </button>
+                  <button 
+                    className={`compare-toggle-btn ${isComparing ? 'active' : ''}`}
+                    onClick={() => handleToggleCompare(property.id)}
+                  >
+                    ⚖️ Compare
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+
+      {/* Comparison Drawer Banner */}
+      {compareBucket.length > 0 && (
+        <div className="compare-sticky-banner">
+          <span>Comparing <strong>{compareBucket.length}</strong> properties</span>
+          <button onClick={() => navigate(`/compare?ids=${compareBucket.join(',')}`)} className="go-compare-btn">
+            Open Side-by-Side Comparison
+          </button>
+        </div>
+      )}
 
       {selectedProperty && (
         <div className="modal-overlay" onClick={closeModal}>
@@ -220,27 +256,105 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) =>
             {!isBookingConfirmed ? (
               <>
                 <div className="modal-header">
-                  <h2>Confirm Your Booking</h2>
+                  <h2>{selectedProperty.title} Details</h2>
                   <button className="close-x" onClick={closeModal}>&times;</button>
                 </div>
+                
                 <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-                  <div className="property-summary-mini">
-                    <img src={selectedProperty.image} alt="" />
-                    <div className="summary-text">
-                      <h4>{selectedProperty.title}</h4>
-                      <p>{selectedProperty.price}</p>
+                  <img src={selectedProperty.image} alt="" className="modal-hero-img" />
+                  
+                  {/* Title & Core Price */}
+                  <div className="detail-price-strip">
+                    <span className="price">{selectedProperty.price}</span>
+                    <span className="availability-pill">{selectedProperty.status || 'Available Now'}</span>
+                  </div>
+
+                  {/* Owner Response Time */}
+                  <div className="owner-response-time-badge">
+                    ⚡ Owner response time: <strong>{selectedProperty.responseTime}</strong>
+                  </div>
+
+                  {/* Cost breakdown */}
+                  <div className="financials-card">
+                    <div>Deposit: <strong>{selectedProperty.deposit}</strong></div>
+                    <div>Maintenance: <strong>{selectedProperty.maintenance}</strong></div>
+                    <div>Furnishing: <strong>{selectedProperty.furnishedStatus}</strong></div>
+                  </div>
+
+                  {/* Safety Score progress indicator */}
+                  <div className="safety-score-card">
+                    <h4>Safety Score (Progress Indicator)</h4>
+                    {(() => {
+                      const features = [
+                        { label: 'CCTV', val: selectedProperty.safetyCctv },
+                        { label: 'Security Guard', val: selectedProperty.safetySecurityGuard },
+                        { label: 'Gated Community', val: selectedProperty.safetyGated },
+                        { label: 'Fire Safety Equipment', val: selectedProperty.safetyFire },
+                        { label: 'Good Lighting', val: selectedProperty.safetyLighting },
+                      ];
+                      const activeCount = features.filter(f => f.val).length;
+                      const scorePercent = (activeCount / 5) * 100;
+                      return (
+                        <div className="safety-progress-wrapper">
+                          <div className="progress-bar-bg">
+                            <div className="progress-bar-fill" style={{ width: `${scorePercent}%` }}></div>
+                          </div>
+                          <div className="score-ratio">{activeCount}/5 Features Confirmed ({scorePercent}%)</div>
+                          <div className="features-tags-list">
+                            {features.map((f, i) => (
+                              <span key={i} className={`feature-tag ${f.val ? 'active' : 'inactive'}`}>
+                                {f.val ? '✓' : '✗'} {f.label}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Property Rating category scores */}
+                  <div className="ratings-card">
+                    <h4>Property Rating</h4>
+                    <div className="ratings-breakdown">
+                      <div className="rating-item"><span>Cleanliness</span> <strong>4.8 ★</strong></div>
+                      <div className="rating-item"><span>Location</span> <strong>4.7 ★</strong></div>
+                      <div className="rating-item"><span>Safety</span> <strong>4.9 ★</strong></div>
+                      <div className="rating-item"><span>Value for Money</span> <strong>4.6 ★</strong></div>
+                      <div className="rating-item"><span>Owner Communication</span> <strong>4.9 ★</strong></div>
                     </div>
                   </div>
-                  
-                  <div style={{ margin: '1rem 0', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    <p>📦 <strong>Deposit:</strong> {selectedProperty.deposit} | <strong>Maint:</strong> {selectedProperty.maintenance}</p>
-                    <p>🛋️ <strong>Furnishing:</strong> {selectedProperty.furnishedStatus} | 🚗 <strong>Parking:</strong> Yes</p>
-                    <p>🛠️ <strong>Amenities:</strong> {selectedProperty.amenities}</p>
-                    <p>🏫 <strong>Nearby Landmarks:</strong> {selectedProperty.nearby}</p>
+
+                  {/* House Rules */}
+                  <div className="house-rules-card">
+                    <h4>House Rules (Before Booking)</h4>
+                    <ul className="rules-list">
+                      {selectedProperty.houseRules.split(',').map((rule: string, i: number) => (
+                        <li key={i}>⚠️ {rule.trim()}</li>
+                      ))}
+                    </ul>
                   </div>
-                  
+
+                  {/* Nearby Places */}
+                  <div className="nearby-places-card">
+                    <h4>Nearby Places & Distance</h4>
+                    <div className="nearby-grid">
+                      {selectedProperty.nearbyPlaces.split(',').map((place: string, i: number) => (
+                        <div key={i} className="nearby-place-pill">📍 {place.trim()}</div>
+                      ))}
+                    </div>
+                    <a 
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedProperty.location)}`} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="map-btn"
+                    >
+                      🧭 Get Directions
+                    </a>
+                  </div>
+
+                  {/* Schedule Visit */}
                   <div className="visit-date-selector">
-                    <label>Schedule Visit Date</label>
+                    <label>Schedule Visit Date & Time</label>
                     <input 
                       type="date" 
                       value={visitDate}
@@ -250,19 +364,21 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) =>
                     />
                   </div>
 
-                  <div className="owner-contact-card" style={{ marginTop: '1rem' }}>
-                    <div className="contact-header">
-                      <span className="contact-icon">📞</span>
-                      <div className="contact-label">Owner's Contact Info</div>
-                    </div>
-                    <div className="owner-phone">
-                      {selectedProperty.ownerPhone || '+91 91234 56789'}
+                  {/* One-Tap contact buttons */}
+                  <div className="one-tap-contact-card">
+                    <h4>One-Tap Owner Contact</h4>
+                    <div className="contact-buttons-row">
+                      <a href={`tel:${selectedProperty.ownerPhone}`} className="contact-btn phone">📞 Call</a>
+                      <button onClick={() => alert("Opening instant chat with Owner...")} className="contact-btn chat">💬 Chat</button>
+                      <a href={`https://wa.me/${selectedProperty.ownerPhone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="contact-btn wa">💬 WhatsApp</a>
+                      <a href="mailto:owner@rentapp.com" className="contact-btn mail">✉️ Email</a>
                     </div>
                   </div>
                 </div>
+
                 <div className="modal-footer">
                   <button className="cancel-btn" onClick={closeModal}>Cancel</button>
-                  <button className="confirm-booking-btn" onClick={confirmBooking}>Confirm Booking</button>
+                  <button className="confirm-booking-btn" onClick={confirmBooking}>Confirm Booking Request</button>
                 </div>
               </>
             ) : (
@@ -276,7 +392,7 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) =>
                 <p>We've notified the owner of <strong>{selectedProperty.title}</strong> about your interest. They will review your profile and get back to you shortly.</p>
                 <div className="owner-reminder">
                   <span>Contact Owner:</span>
-                  <strong>{selectedProperty.ownerPhone || '+91 91234 56789'}</strong>
+                  <strong>{selectedProperty.ownerPhone}</strong>
                 </div>
                 <button className="done-btn" onClick={closeModal}>Done</button>
               </div>
@@ -289,8 +405,8 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) =>
         .booking-page {
           padding: 2rem;
           max-width: 1200px;
-          margin: 0 auto;
-          min-height: 100vh;
+          margin: 80px auto 0;
+          min-height: calc(100vh - 80px);
         }
         .booking-header {
           display: flex;
@@ -319,12 +435,30 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) =>
         .booking-header h1 {
           font-size: 2.5rem;
           font-weight: 800;
-          background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
+          color: #0f172a;
         }
         .filter-section {
           margin-bottom: 3rem;
+        }
+        .ai-search-toggle {
+          background: #eff6ff;
+          border: 1px solid #bfdbfe;
+          color: #1e40af;
+          padding: 0.5rem 1rem;
+          border-radius: 99px;
+          font-size: 0.8rem;
+          font-weight: 700;
+          cursor: pointer;
+          margin-bottom: 1rem;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          transition: all 0.2s;
+        }
+        .ai-search-toggle.active {
+          background: #2563eb;
+          color: white;
+          border-color: #2563eb;
         }
         .search-bar-wrapper {
           display: flex;
@@ -333,7 +467,7 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) =>
           padding: 0.5rem;
           border-radius: 12px;
           margin-bottom: 1.5rem;
-          box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+          box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
         }
         .search-input {
           flex: 1;
@@ -349,48 +483,22 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) =>
           padding: 0.75rem;
           border-radius: 8px;
           cursor: pointer;
-          transition: background 0.2s;
-        }
-        .search-button:hover {
-          background: #2563eb;
-        }
-        .filter-chips {
-          display: flex;
-          gap: 1rem;
-          overflow-x: auto;
-          padding-bottom: 0.5rem;
-        }
-        .filter-chip {
-          padding: 0.5rem 1.25rem;
-          border-radius: 99px;
-          background: #f1f5f9;
-          border: 1px solid #e2e8f0;
-          color: #475569;
-          cursor: pointer;
-          white-space: nowrap;
-          transition: all 0.2s;
-        }
-        .filter-chip.active {
-          background: #0f172a;
-          color: white;
-          border-color: #0f172a;
         }
         .property-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          gap: 2rem;
+          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+          gap: 2.5rem;
         }
         .property-card-alt {
           background: white;
-          border-radius: 16px;
+          border-radius: 24px;
           overflow: hidden;
-          box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
-          transition: transform 0.3s, box-shadow 0.3s;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
           border: 1px solid #f1f5f9;
+          transition: transform 0.3s;
         }
         .property-card-alt:hover {
-          transform: translateY(-8px);
-          box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+          transform: translateY(-5px);
         }
         .property-image-wrapper {
           position: relative;
@@ -401,233 +509,301 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) =>
           height: 100%;
           object-fit: cover;
         }
-        .property-tag {
+        .heart-icon-btn {
+          position: absolute;
+          top: 1rem;
+          right: 1rem;
+          background: white;
+          border: none;
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.25rem;
+          cursor: pointer;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .status-badge-pill {
           position: absolute;
           top: 1rem;
           left: 1rem;
-          background: rgba(255, 255, 255, 0.9);
+          background: rgba(15, 23, 42, 0.85);
+          backdrop-filter: blur(8px);
+          color: white;
           padding: 0.25rem 0.75rem;
-          border-radius: 6px;
+          border-radius: 99px;
           font-size: 0.75rem;
-          font-weight: 600;
-          color: #0f172a;
-          backdrop-filter: blur(4px);
+          font-weight: 800;
+          text-transform: uppercase;
         }
+        .status-badge-pill.available-now { background: #10b981; }
+        .status-badge-pill.available-soon { background: #f59e0b; }
+        .status-badge-pill.reserved { background: #f97316; }
+        .status-badge-pill.occupied { background: #64748b; }
+        
         .property-details {
           padding: 1.5rem;
         }
         .property-price {
-          color: #2563eb;
-          font-weight: 700;
-          font-size: 1.25rem;
+          font-size: 1.5rem;
+          font-weight: 800;
+          color: #3b82f6;
           margin-bottom: 0.5rem;
         }
         .property-title {
-          font-size: 1.125rem;
-          font-weight: 700;
-          color: #1e293b;
-          margin-bottom: 0.25rem;
+          font-size: 1.25rem;
+          color: #0f172a;
+          margin: 0 0 0.5rem 0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         .property-location {
           color: #64748b;
           font-size: 0.875rem;
-          margin-bottom: 1rem;
+          margin: 0 0 1rem 0;
         }
         .property-info {
           display: flex;
           gap: 1rem;
+          font-size: 0.85rem;
           color: #475569;
-          font-size: 0.875rem;
           margin-bottom: 1.5rem;
-          padding-top: 1rem;
-          border-top: 1px solid #f1f5f9;
+        }
+        .action-buttons-row {
+          display: flex;
+          gap: 1rem;
         }
         .book-now-btn {
-          width: 100%;
-          padding: 0.75rem;
-          background: #0f172a;
+          flex: 1;
+          background: #10b981;
           color: white;
           border: none;
-          border-radius: 8px;
-          font-weight: 600;
+          padding: 0.75rem;
+          border-radius: 12px;
+          font-weight: 700;
           cursor: pointer;
-          transition: background 0.2s;
         }
-        .book-now-btn:hover {
-          background: #1e293b;
+        .book-now-btn:hover { background: #059669; }
+        .compare-toggle-btn {
+          background: #f1f5f9;
+          color: #475569;
+          border: none;
+          padding: 0.75rem 1rem;
+          border-radius: 12px;
+          font-weight: 700;
+          cursor: pointer;
         }
+        .compare-toggle-btn.active {
+          background: #3b82f6;
+          color: white;
+        }
+        
+        /* Sticky compare drawer */
+        .compare-sticky-banner {
+          position: fixed;
+          bottom: 2rem;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #0f172a;
+          color: white;
+          padding: 1rem 2rem;
+          border-radius: 99px;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+          display: flex;
+          align-items: center;
+          gap: 2rem;
+          z-index: 999;
+          animation: slideUp 0.3s ease;
+        }
+        @keyframes slideUp {
+          from { transform: translate(-50%, 50px); opacity: 0; }
+          to { transform: translate(-50%, 0); opacity: 1; }
+        }
+        .go-compare-btn {
+          background: #3b82f6;
+          color: white;
+          border: none;
+          padding: 0.5rem 1.25rem;
+          border-radius: 99px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .go-compare-btn:hover { background: #2563eb; }
 
-        /* Modal Styles */
+        /* Modal Details */
         .modal-overlay {
           position: fixed;
           top: 0;
           left: 0;
           right: 0;
           bottom: 0;
-          background: rgba(15, 23, 42, 0.8);
-          backdrop-filter: blur(8px);
+          background: rgba(0,0,0,0.5);
+          backdrop-filter: blur(4px);
           display: flex;
           align-items: center;
           justify-content: center;
           z-index: 1000;
-          padding: 2rem;
         }
         .booking-modal {
           background: white;
-          width: 100%;
-          max-width: 500px;
-          border-radius: 24px;
+          width: 90%;
+          max-width: 650px;
+          border-radius: 28px;
           overflow: hidden;
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-          animation: modalSlideUp 0.3s ease-out;
-        }
-        @keyframes modalSlideUp {
-          from { transform: translateY(20px); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
+          box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
         }
         .modal-header {
-          padding: 1.5rem 2rem;
           display: flex;
           justify-content: space-between;
           align-items: center;
+          padding: 1.5rem 2rem;
           border-bottom: 1px solid #f1f5f9;
         }
-        .modal-header h2 {
-          font-size: 1.25rem;
+        .modal-header h2 { margin: 0; font-size: 1.5rem; color: #0f172a; }
+        .close-x { background: none; border: none; font-size: 24px; cursor: pointer; color: #94a3b8; }
+        .modal-body { padding: 2rem; }
+        .modal-hero-img { width: 100%; height: 240px; object-fit: cover; border-radius: 20px; margin-bottom: 1.5rem; }
+        .detail-price-strip { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .detail-price-strip .price { font-size: 1.75rem; font-weight: 800; color: #3b82f6; }
+        .availability-pill { background: #dcfce7; color: #166534; padding: 0.25rem 0.75rem; border-radius: 99px; font-weight: 700; font-size: 0.85rem; }
+        .owner-response-time-badge { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 0.75rem; border-radius: 12px; font-size: 0.85rem; margin-bottom: 1.5rem; }
+        .financials-card { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; background: #f8fafc; padding: 1rem; border-radius: 16px; margin-bottom: 1.5rem; font-size: 0.9rem; }
+        
+        .safety-score-card, .ratings-card, .house-rules-card, .nearby-places-card, .one-tap-contact-card {
+          margin-bottom: 1.5rem;
+          border-top: 1px solid #f1f5f9;
+          padding-top: 1rem;
+        }
+        .safety-score-card h4, .ratings-card h4, .house-rules-card h4, .nearby-places-card h4, .one-tap-contact-card h4 {
+          margin: 0 0 1rem 0;
+          font-size: 1.1rem;
           color: #0f172a;
-          margin: 0;
         }
-        .close-x {
-          background: none;
-          border: none;
-          font-size: 1.5rem;
-          color: #94a3b8;
-          cursor: pointer;
-        }
-        .modal-body {
-          padding: 2rem;
-        }
-        .property-summary-mini {
+        .safety-progress-wrapper {
           display: flex;
-          gap: 1rem;
-          background: #f8fafc;
-          padding: 1rem;
-          border-radius: 12px;
-          margin-bottom: 1.5rem;
-        }
-        .property-summary-mini img {
-          width: 60px;
-          height: 60px;
-          border-radius: 8px;
-          object-fit: cover;
-        }
-        .summary-text h4 { margin: 0; color: #1e293b; }
-        .summary-text p { margin: 0; color: #2563eb; font-weight: 700; }
-
-        .owner-contact-card {
-          background: #eff6ff;
-          padding: 1.5rem;
-          border-radius: 16px;
-          border: 1px solid #dbeafe;
-          margin-bottom: 1.5rem;
-          text-align: center;
-        }
-        .contact-header {
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          flex-direction: column;
           gap: 0.5rem;
-          color: #1d4ed8;
+        }
+        .progress-bar-bg {
+          height: 10px;
+          background: #e2e8f0;
+          border-radius: 99px;
+          overflow: hidden;
+        }
+        .progress-bar-fill {
+          height: 100%;
+          background: #10b981;
+          border-radius: 99px;
+          transition: width 0.4s ease;
+        }
+        .score-ratio {
+          font-size: 0.8rem;
           font-weight: 700;
-          font-size: 0.875rem;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          margin-bottom: 0.5rem;
-        }
-        .owner-phone {
-          font-size: 1.75rem;
-          font-weight: 800;
-          color: #1e293b;
-          margin-bottom: 0.5rem;
-        }
-        .contact-subtext {
-          font-size: 0.75rem;
           color: #64748b;
-          margin: 0;
         }
-
-        .notification-hint {
+        .features-tags-list {
           display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          margin-top: 0.5rem;
+        }
+        .feature-tag {
+          padding: 0.25rem 0.5rem;
+          border-radius: 6px;
+          font-size: 0.75rem;
+          font-weight: 600;
+        }
+        .feature-tag.active { background: #dcfce7; color: #166534; }
+        .feature-tag.inactive { background: #fee2e2; color: #991b1b; }
+
+        .ratings-breakdown {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
           gap: 0.75rem;
-          align-items: center;
-          color: #475569;
-          font-size: 0.875rem;
         }
-        .hint-icon { font-size: 1.25rem; }
-
-        .modal-footer {
-          padding: 1.5rem 2rem;
-          background: #f8fafc;
+        .rating-item {
           display: flex;
+          justify-content: space-between;
+          font-size: 0.85rem;
+          color: #475569;
+        }
+        .rules-list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          font-size: 0.875rem;
+          color: #475569;
+        }
+        .nearby-grid {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          margin-bottom: 1rem;
+        }
+        .nearby-place-pill {
+          background: #f1f5f9;
+          color: #475569;
+          padding: 0.4rem 0.75rem;
+          border-radius: 8px;
+          font-size: 0.8rem;
+          font-weight: 600;
+        }
+        .map-btn {
+          background: #4f46e5;
+          color: white;
+          text-decoration: none;
+          padding: 0.5rem 1rem;
+          border-radius: 8px;
+          font-weight: 700;
+          font-size: 0.8rem;
+          display: inline-block;
+        }
+        .map-btn:hover { background: #4338ca; }
+
+        .contact-buttons-row {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
           gap: 1rem;
         }
-        .cancel-btn {
-          flex: 1;
-          padding: 0.75rem;
-          background: white;
-          border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          font-weight: 600;
-          color: #64748b;
-          cursor: pointer;
-        }
-        .confirm-booking-btn {
-          flex: 2;
-          padding: 0.75rem;
-          background: #0f172a;
-          color: white;
+        .contact-btn {
           border: none;
-          border-radius: 12px;
-          font-weight: 600;
-          cursor: pointer;
-        }
-
-        .success-state {
-          padding: 3rem 2rem;
+          text-decoration: none;
           text-align: center;
-        }
-        .success-icon-wrapper {
-          width: 64px;
-          height: 64px;
-          background: #dcfce7;
-          color: #22c55e;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin: 0 auto 1.5rem;
-        }
-        .success-svg { width: 32px; height: 32px; }
-        .success-state h2 { color: #0f172a; margin-bottom: 1rem; }
-        .success-state p { color: #64748b; margin-bottom: 2rem; }
-        .owner-reminder {
-          background: #f8fafc;
-          padding: 1rem;
-          border-radius: 12px;
-          margin-bottom: 2rem;
-        }
-        .owner-reminder span { display: block; font-size: 0.75rem; color: #94a3b8; }
-        .owner-reminder strong { font-size: 1.25rem; color: #1e293b; }
-        .done-btn {
-          width: 100%;
-          padding: 1rem;
-          background: #0f172a;
-          color: white;
-          border: none;
+          padding: 0.75rem 0.5rem;
           border-radius: 12px;
           font-weight: 700;
+          font-size: 0.8rem;
+          color: white;
           cursor: pointer;
         }
+        .contact-btn.phone { background: #10b981; }
+        .contact-btn.chat { background: #3b82f6; }
+        .contact-btn.wa { background: #25d366; }
+        .contact-btn.mail { background: #ea580c; }
+        
+        .modal-footer {
+          display: flex;
+          justify-content: flex-end;
+          gap: 1rem;
+          padding: 1.5rem 2rem;
+          border-top: 1px solid #f1f5f9;
+          background: #f8fafc;
+        }
+        .cancel-btn { background: white; border: 1px solid #e2e8f0; padding: 0.75rem 1.5rem; border-radius: 12px; font-weight: 700; cursor: pointer; color: #64748b; }
+        .confirm-booking-btn { background: #10b981; border: none; padding: 0.75rem 1.5rem; border-radius: 12px; font-weight: 700; cursor: pointer; color: white; }
+        .confirm-booking-btn:hover { background: #059669; }
+
+        .success-state { text-align: center; padding: 3rem 2rem; }
+        .success-icon-wrapper { width: 72px; height: 72px; background: #dcfce7; color: #10b981; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; }
+        .success-svg { width: 36px; height: 36px; }
+        .owner-reminder { background: #f8fafc; border: 1px solid #e2e8f0; padding: 1rem; border-radius: 12px; display: flex; justify-content: space-between; margin: 1.5rem 0; font-size: 0.9rem; }
+        .done-btn { background: #0f172a; color: white; border: none; padding: 0.75rem 2rem; border-radius: 12px; font-weight: 700; cursor: pointer; }
       `}</style>
     </div>
   );

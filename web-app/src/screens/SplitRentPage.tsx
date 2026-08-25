@@ -37,12 +37,18 @@ const SplitRentPage: React.FC = () => {
         }
         
         if (tenant.splitRent) {
-          try {
-            const data = JSON.parse(tenant.splitRent);
+          if (typeof tenant.splitRent === 'string') {
+            try {
+              const data = JSON.parse(tenant.splitRent);
+              if (data.roommates) setRoommates(data.roommates);
+              if (data.totalRent) setTotalRent(data.totalRent);
+            } catch(e) {
+              console.error('Failed to parse splitRent JSON:', e);
+            }
+          } else {
+            const data = tenant.splitRent;
             if (data.roommates) setRoommates(data.roommates);
             if (data.totalRent) setTotalRent(data.totalRent);
-          } catch(e) {
-            console.error('Failed to parse splitRent JSON:', e);
           }
         }
       }

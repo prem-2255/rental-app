@@ -197,18 +197,41 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   }
 });
 
+function formatUser(user: any) {
+  if (!user) return user;
+  
+  // Safe helper to parse JSON if string, or return as is
+  const parseSafe = (val: any) => {
+    if (typeof val === 'string') {
+      try {
+        return JSON.parse(val);
+      } catch (e) {
+        return null;
+      }
+    }
+    return val;
+  };
+
+  return {
+    ...user,
+    checklistTenant: parseSafe(user.checklistTenant),
+    checklistOwner: parseSafe(user.checklistOwner),
+    splitRent: parseSafe(user.splitRent)
+  };
+}
+
 // ─── Users & Tenants ──────────────────────────────────────────────────
 
 app.get('/api/users', async (req, res) => {
   const users = await prisma.user.findMany();
-  res.json(users);
+  res.json(users.map(formatUser));
 });
 
 app.get('/api/tenants', async (req, res) => {
   const tenants = await prisma.user.findMany({
-    where: { role: 'tenant' }
+    where: { role: 'customer' }
   });
-  res.json(tenants);
+  res.json(tenants.map(formatUser));
 });
 
 app.get('/api/tenants/:id', async (req, res) => {
@@ -222,7 +245,7 @@ app.get('/api/tenants/:id', async (req, res) => {
       agreement: true,
     }
   });
-  res.json(tenant);
+  res.json(formatUser(tenant));
 });
 
 app.post('/api/users', async (req, res) => {
@@ -230,7 +253,7 @@ app.post('/api/users', async (req, res) => {
   const user = await prisma.user.create({
     data: { name, email, phone, role }
   });
-  res.json(user);
+  res.json(formatUser(user));
 });
 
 // ─── Properties ───────────────────────────────────────────────────────
@@ -480,7 +503,7 @@ app.post('/api/seed', async (req, res) => {
       }
     });
     
-    res.json({ message: "Seeded successfully", property: prop, tenant });
+    res.json({ message: "Seeded successfully", property: prop, tenant: formatUser(tenant) });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
@@ -741,8 +764,8 @@ app.put('/api/users/:id/checklist', async (req, res) => {
     
     res.json({ 
       success: true, 
-      checklistTenant: updatedUser.checklistTenant,
-      checklistOwner: updatedUser.checklistOwner 
+      checklistTenant: updatedUser.checklistTenant ? JSON.parse(updatedUser.checklistTenant) : null,
+      checklistOwner: updatedUser.checklistOwner ? JSON.parse(updatedUser.checklistOwner) : null 
     });
   } catch (err) {
     res.status(500).json({ error: String(err) });
@@ -760,7 +783,10 @@ app.put('/api/users/:id/split-rent', async (req, res) => {
       data: { splitRent: JSON.stringify(splitRent) }
     });
     
-    res.json({ success: true, splitRent: updatedUser.splitRent });
+    res.json({ 
+      success: true, 
+      splitRent: updatedUser.splitRent ? JSON.parse(updatedUser.splitRent) : null 
+    });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
@@ -913,7 +939,7 @@ app.get('/api/owner/:ownerId/dashboard-stats', async (req, res) => {
     // Income calculation
     let monthlyIncome = 0;
     properties.forEach(p => {
-      if (p.status === 'Occupied') {
+      if (p.status === 'Occupied' || p.status === 'Reserved') {
         const val = parseInt(p.price.replace(/[^\d]/g, '')) || 0;
         monthlyIncome += val;
       }
@@ -969,10 +995,14 @@ app.post('/api/agreement', async (req, res) => {
     await prisma.tenantAgreement.deleteMany({
       where: { tenantId }
     });
-    
+
+    const start = new Date();
+    const end = new Date();
+    end.setMonth(start.getMonth() + (duration || 11));
+
     const agreement = await prisma.tenantAgreement.create({
       data: {
-        renewalDate: new Date(Date.now() + (duration || 11) * 30 * 24 * 60 * 60 * 1000).toLocaleDateString(),
+        renewalDate: end.toLocaleDateString(),
         signedDate: dateStr,
         status: 'Draft',
         terms,
@@ -1050,7 +1080,7 @@ app.get('/api/admin/users', async (req, res) => {
     const users = await prisma.user.findMany({
       orderBy: { createdAt: 'desc' }
     });
-    res.json(users);
+    res.json(users.map(formatUser));
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
@@ -1066,7 +1096,7 @@ app.put('/api/admin/users/:id/block', async (req, res) => {
       where: { id },
       data: { isBlocked: !user.isBlocked }
     });
-    res.json(updated);
+    res.json(formatUser(updated));
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }

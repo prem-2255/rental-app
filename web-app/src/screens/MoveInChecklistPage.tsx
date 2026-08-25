@@ -76,10 +76,18 @@ const MoveInChecklistPage: React.FC = () => {
       const data = await res.json();
       if (data) {
         if (data.checklistTenant) {
-          try { setTenantChecklist(JSON.parse(data.checklistTenant)); } catch (e) { console.error(e); }
+          if (typeof data.checklistTenant === 'string') {
+            try { setTenantChecklist(JSON.parse(data.checklistTenant)); } catch (e) { console.error(e); }
+          } else {
+            setTenantChecklist(data.checklistTenant);
+          }
         }
         if (data.checklistOwner) {
-          try { setOwnerChecklist(JSON.parse(data.checklistOwner)); } catch (e) { console.error(e); }
+          if (typeof data.checklistOwner === 'string') {
+            try { setOwnerChecklist(JSON.parse(data.checklistOwner)); } catch (e) { console.error(e); }
+          } else {
+            setOwnerChecklist(data.checklistOwner);
+          }
         }
       }
     } catch (err) {

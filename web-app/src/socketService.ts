@@ -1,13 +1,20 @@
 import { io, Socket } from 'socket.io-client';
 
 let socket: Socket | null = null;
+let currentUserId: string | null = null;
 
 export const connectSocket = (userId: string): Socket => {
+  // If we already have a socket for the same user, return it
+  if (socket && currentUserId === userId) {
+    return socket;
+  }
+
+  // Otherwise, disconnect the old socket and create a new one
   if (socket) {
     socket.disconnect();
   }
 
-  // Connects via window.location (proxied in dev, direct in prod)
+  currentUserId = userId;
   socket = io(window.location.origin, {
     query: { userId },
     transports: ['websocket', 'polling'],
@@ -20,6 +27,8 @@ export const connectSocket = (userId: string): Socket => {
 
   socket.on('disconnect', (reason) => {
     console.log('🔌 Disconnected from socket server, reason:', reason);
+    // Clear the userId on disconnect so that a new connection will be forced if needed
+    currentUserId = null;
   });
 
   return socket;
@@ -29,6 +38,7 @@ export const disconnectSocket = () => {
   if (socket) {
     socket.disconnect();
     socket = null;
+    currentUserId = null;
   }
 };
 

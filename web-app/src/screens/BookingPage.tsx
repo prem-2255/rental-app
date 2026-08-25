@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Property } from '../types';
+import { useTenantSavedIds } from '../hooks/useTenantSavedIds';
 
 interface BookingPageProps {
   properties: Property[];
@@ -16,28 +17,10 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) =>
   const [selectedProperty, setSelectedProperty] = useState<any | null>(null);
   const [isBookingConfirmed, setIsBookingConfirmed] = useState(false);
   const [visitDate, setVisitDate] = useState('');
-  
-  // Custom enhanced states
-  const [savedIds, setSavedIds] = useState<string[]>([]);
+
+  // Custom enhanced states using hook
+  const { savedIds, refetch: refetchSavedIds } = useTenantSavedIds(currentUser?.id || null);
   const [compareBucket, setCompareBucket] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (currentUser?.id) {
-      loadSavedIds(currentUser.id);
-    }
-  }, [currentUser]);
-
-  const loadSavedIds = async (uid: string) => {
-    try {
-      const res = await fetch(`/api/tenants/${uid}`);
-      const tenant = await res.json();
-      if (tenant && tenant.savedProperties) {
-        setSavedIds(tenant.savedProperties.split(',').filter(Boolean));
-      }
-    } catch(err) {
-      console.error(err);
-    }
-  };
 
   const handleToggleFavorite = async (propertyId: string) => {
     if (!currentUser) {
@@ -51,13 +34,18 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) =>
         body: JSON.stringify({ propertyId })
       });
       if (res.ok) {
-        const data = await res.json();
-        setSavedIds(data.savedProperties ? data.savedProperties.split(',').filter(Boolean) : []);
+        refetchSavedIds();
       }
     } catch (err) {
       console.error(err);
     }
   };
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      refetchSavedIds();
+    }
+  }, [currentUser?.id, refetchSavedIds]);
 
   const handleToggleCompare = (propertyId: string) => {
     if (compareBucket.includes(propertyId)) {

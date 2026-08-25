@@ -22,10 +22,18 @@ const TenantDetailPage: React.FC = () => {
       .then(data => {
         setTenant(data);
         if (data.checklistTenant) {
-          try { setTenantChecklist(JSON.parse(data.checklistTenant)); } catch (e) { console.error(e); }
+          if (typeof data.checklistTenant === 'string') {
+            try { setTenantChecklist(JSON.parse(data.checklistTenant)); } catch (e) { console.error(e); }
+          } else {
+            setTenantChecklist(data.checklistTenant);
+          }
         }
         if (data.checklistOwner) {
-          try { setOwnerChecklist(JSON.parse(data.checklistOwner)); } catch (e) { console.error(e); }
+          if (typeof data.checklistOwner === 'string') {
+            try { setOwnerChecklist(JSON.parse(data.checklistOwner)); } catch (e) { console.error(e); }
+          } else {
+            setOwnerChecklist(data.checklistOwner);
+          }
         }
       })
       .catch(console.error);
@@ -47,7 +55,7 @@ const TenantDetailPage: React.FC = () => {
       if (res.ok) {
         setTenant(prev => {
           if (!prev) return null;
-          return { ...prev, checklistOwner: JSON.stringify(updated) };
+          return { ...prev, checklistOwner: updated };
         });
       }
     } catch(err) {

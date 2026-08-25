@@ -9,7 +9,7 @@ services:
       - "5001:5001"
     environment:
       - DATABASE_URL=file:./dev.db
-      - FAST2SMS_API_KEY=uoFQac4SBMsXHnRILkeb1NWtdi807yAfvp9mO3jZgPCqxwY6ErLOrF4UdyVKx3Ctp26weu5mq7zWaNYX
+      - FAST2SMS_API_KEY=${FAST2SMS_API_KEY:-}
       - PORT=5001
     volumes:
       - app-db:/app/backend/prisma

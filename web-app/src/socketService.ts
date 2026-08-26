@@ -16,7 +16,7 @@ export const connectSocket = (userId: string): Socket => {
 
   currentUserId = userId;
   socket = io(window.location.origin, {
-    query: { userId },
+    auth: { token: localStorage.getItem('token') },
     transports: ['websocket', 'polling'],
     autoConnect: true,
   });

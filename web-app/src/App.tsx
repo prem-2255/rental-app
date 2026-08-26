@@ -513,6 +513,7 @@ function App() {
     setCurrentUser(null);
     setUserRole(null);
     localStorage.removeItem('currentUser');
+    localStorage.removeItem('token');
     disconnectSocket();
   };
 

@@ -162,6 +162,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onLogin }) => {
 
       if (res.ok && data.success) {
         setLoadingMsg(`Welcome, ${data.user.name}! Logging you in...`);
+        if (data.token) localStorage.setItem('token', data.token);
         setTimeout(() => {
           onLogin(data.user);
           onClose();

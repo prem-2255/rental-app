@@ -24,5 +24,6 @@ EXPOSE 5001
 ENV PORT=5001
 ENV NODE_ENV=production
 RUN npx prisma generate
+RUN npm run build
 
-CMD ["npm", "run", "dev"]
+CMD ["node", "dist/index.js"]

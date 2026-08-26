@@ -5,21 +5,63 @@ import path from 'path';
 import dotenv from 'dotenv';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
+import crypto from 'crypto';
+import type { Request, Response, NextFunction, RequestHandler } from 'express';
 
 dotenv.config();
+
+declare global {
+  namespace Express {
+    interface Request { auth?: { userId: string; role: string }; }
+  }
+}
+
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error('JWT_SECRET is not set in .env');
+
+function signToken(user: { id: string; role: string }) {
+  return jwt.sign({ sub: user.id, role: user.role }, JWT_SECRET!, { expiresIn: '7d' });
+}
+
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const p = jwt.verify(token, JWT_SECRET!) as { sub: string; role: string };
+    req.auth = { userId: p.sub, role: p.role };
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
+function requireRole(...roles: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.auth || !roles.includes(req.auth.role))
+      return res.status(403).json({ error: 'Forbidden' });
+    next();
+  };
+}
+
+const wrap = (fn: RequestHandler): RequestHandler => (req: Request, res: Response, next: NextFunction) =>
+  Promise.resolve(fn(req, res, next)).catch(next);
+
+const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false });
 
 const prisma = new PrismaClient();
 const app = express();
 const server = http.createServer(app);
 const io = new SocketIOServer(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
-  }
+  cors: { origin: process.env.FRONTEND_ORIGIN, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] }
 });
 
-app.use(cors());
-app.use(express.json());
+app.use(cors({ origin: process.env.FRONTEND_ORIGIN, credentials: true }));
+app.use(express.json({ limit: '100kb' }));
 
 // ─── OTP Authentication ───────────────────────────────────────────────
 
@@ -27,11 +69,11 @@ const FAST2SMS_API_KEY = process.env.FAST2SMS_API_KEY || '';
 
 // Generate a random 6-digit OTP
 function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return crypto.randomInt(100000, 1000000).toString();
 }
 
 // Send OTP to phone number
-app.post('/api/auth/send-otp', async (req, res) => {
+app.post('/api/auth/send-otp', otpLimiter, async (req, res) => {
   try {
     const { phone, role } = req.body;
 
@@ -102,14 +144,12 @@ app.post('/api/auth/send-otp', async (req, res) => {
       // Real SMS was sent
       res.json({ success: true, message: 'OTP sent successfully via SMS', devMode: false });
     } else {
-      // Dev mode — return OTP in response for on-screen display
-      console.log(`🔧 DEV MODE — OTP for ${cleanPhone}: ${otp}`);
-      res.json({ 
-        success: true, 
-        message: 'OTP generated (Dev Mode)', 
-        devMode: true, 
-        devOtp: otp 
-      });
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`🔧 DEV MODE — OTP for ${cleanPhone}: ${otp}`);
+        return res.json({ success: true, message: 'OTP generated (Dev Mode)', devMode: true, devOtp: otp });
+      }
+      // In production, if SMS failed, do NOT reveal the code
+      return res.status(502).json({ error: 'Could not send OTP. Please try again.' });
     }
 
   } catch (error) {
@@ -119,7 +159,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
 });
 
 // Verify OTP and login/register user
-app.post('/api/auth/verify-otp', async (req, res) => {
+app.post('/api/auth/verify-otp', otpLimiter, async (req, res) => {
   try {
     const { phone, otp, role } = req.body;
 
@@ -159,6 +199,8 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       data: { verified: true }
     });
 
+    const safeRole = role === 'owner' ? 'owner' : 'customer'; // never 'admin' from the client
+    
     // Find or create user
     let user = await prisma.user.findUnique({
       where: { phone: cleanPhone }
@@ -170,7 +212,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
         data: {
           name: `User ${cleanPhone.slice(-4)}`,
           phone: cleanPhone,
-          role: role,
+          role: safeRole,
         }
       });
       console.log(`✅ New user created: ${user.id} (${cleanPhone})`);
@@ -181,8 +223,10 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       where: { phone: cleanPhone, verified: true }
     });
 
+    const token = signToken(user);
     res.json({
       success: true,
+      token,
       user: {
         id: user.id,
         name: user.name,
@@ -222,19 +266,21 @@ function formatUser(user: any) {
 
 // ─── Users & Tenants ──────────────────────────────────────────────────
 
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', requireAuth, wrap(async (req, res) => {
   const users = await prisma.user.findMany();
   res.json(users.map(formatUser));
-});
+}));
 
-app.get('/api/tenants', async (req, res) => {
+app.get('/api/tenants', requireAuth, wrap(async (req, res) => {
   const tenants = await prisma.user.findMany({
     where: { role: 'customer' }
   });
   res.json(tenants.map(formatUser));
-});
+}));
 
-app.get('/api/tenants/:id', async (req, res) => {
+app.get('/api/tenants/:id', requireAuth, wrap(async (req, res) => {
+  if (req.auth!.userId !== req.params.id && !['owner', 'admin'].includes(req.auth!.role))
+    return res.status(403).json({ error: 'Forbidden' });
   const tenant = await prisma.user.findUnique({
     where: { id: req.params.id },
     include: {
@@ -246,31 +292,55 @@ app.get('/api/tenants/:id', async (req, res) => {
     }
   });
   res.json(formatUser(tenant));
-});
+}));
 
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', requireAuth, wrap(async (req, res) => {
   const { name, email, phone, role } = req.body;
   const user = await prisma.user.create({
     data: { name, email, phone, role }
   });
   res.json(formatUser(user));
-});
+}));
 
 // ─── Properties ───────────────────────────────────────────────────────
 
-app.get('/api/properties', async (req, res) => {
+app.get('/api/properties', requireAuth, wrap(async (req, res) => {
   const properties = await prisma.property.findMany();
   res.json(properties);
+}));
+
+const propertyInput = z.object({
+  title: z.string().max(200),
+  image: z.string().max(500),
+  price: z.string().max(50),
+  location: z.string().max(200),
+  beds: z.number().int().min(0).max(50),
+  baths: z.number().int().min(0).max(50),
+  type: z.string().max(50),
+  houseRules: z.string().optional(),
+  nearbyPlaces: z.string().optional(),
+  safetyCctv: z.boolean().optional(),
+  safetySecurityGuard: z.boolean().optional(),
+  safetyGated: z.boolean().optional(),
+  safetyFire: z.boolean().optional(),
+  safetyLighting: z.boolean().optional(),
+  responseTime: z.string().optional(),
+  visitDate: z.string().optional(),
+  visitTime: z.string().optional(),
+  furnishedStatus: z.string().optional(),
+  status: z.string().optional()
 });
 
-app.post('/api/properties', async (req, res) => {
+app.post('/api/properties', requireAuth, requireRole('owner'), wrap(async (req, res) => {
+  const parsed = propertyInput.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const property = await prisma.property.create({
-    data: req.body
+    data: { ...parsed.data, ownerId: req.auth!.userId }
   });
   res.json(property);
-});
+}));
 
-app.get('/api/owner/:ownerId/properties', async (req, res) => {
+app.get('/api/owner/:ownerId/properties', requireAuth, wrap(async (req, res) => {
   try {
     const { ownerId } = req.params;
     const properties = await prisma.property.findMany({
@@ -283,9 +353,9 @@ app.get('/api/owner/:ownerId/properties', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
-app.delete('/api/properties/:id', async (req, res) => {
+app.delete('/api/properties/:id', requireAuth, wrap(async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -309,11 +379,11 @@ app.delete('/api/properties/:id', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
 // ─── Booking Requests ──────────────────────────────────────────────────
 
-app.post('/api/bookings', async (req, res) => {
+app.post('/api/bookings', requireAuth, wrap(async (req, res) => {
   try {
     const { propertyId, customerId } = req.body;
     if (!propertyId || !customerId) {
@@ -339,9 +409,9 @@ app.post('/api/bookings', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
-app.get('/api/owner/:ownerId/bookings', async (req, res) => {
+app.get('/api/owner/:ownerId/bookings', requireAuth, wrap(async (req, res) => {
   try {
     const bookings = await prisma.bookingRequest.findMany({
       where: {
@@ -359,9 +429,9 @@ app.get('/api/owner/:ownerId/bookings', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
-app.get('/api/customer/:customerId/bookings', async (req, res) => {
+app.get('/api/customer/:customerId/bookings', requireAuth, wrap(async (req, res) => {
   try {
     const { customerId } = req.params;
     const bookings = await prisma.bookingRequest.findMany({
@@ -376,9 +446,9 @@ app.get('/api/customer/:customerId/bookings', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
-app.put('/api/bookings/:id', async (req, res) => {
+app.put('/api/bookings/:id', requireAuth, wrap(async (req, res) => {
   try {
     const { status } = req.body;
     if (!status) {
@@ -395,49 +465,63 @@ app.put('/api/bookings/:id', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
 // ─── Tenant Records ──────────────────────────────────────────────────
 
-app.get('/api/tenants/:id/maintenance', async (req, res) => {
+app.get('/api/tenants/:id/maintenance', requireAuth, wrap(async (req, res) => {
   const records = await prisma.tenantMaintenance.findMany({
     where: { tenantId: req.params.id }
   });
   res.json(records);
+}));
+
+const maintenanceInput = z.object({
+  type: z.string().max(100),
+  description: z.string().max(1000).optional(),
+  date: z.string().optional(),
+  status: z.string().optional()
 });
 
-app.post('/api/tenants/:id/maintenance', async (req, res) => {
+app.post('/api/tenants/:id/maintenance', requireAuth, wrap(async (req, res) => {
+  if (req.auth!.userId !== req.params.id) return res.status(403).json({ error: 'Forbidden' });
+  const parsed = maintenanceInput.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  
+  const dataToCreate: any = { ...parsed.data, tenantId: req.params.id };
+  if (dataToCreate.status === undefined) delete dataToCreate.status;
+  if (dataToCreate.date === undefined) delete dataToCreate.date;
+  if (dataToCreate.description === undefined) delete dataToCreate.description;
+
   const record = await prisma.tenantMaintenance.create({
-    data: {
-      ...req.body,
-      tenantId: req.params.id
-    }
+    data: dataToCreate
   });
   res.json(record);
-});
+}));
 
-app.get('/api/tenants/:id/electricity', async (req, res) => {
+app.get('/api/tenants/:id/electricity', requireAuth, wrap(async (req, res) => {
   const records = await prisma.tenantElectricity.findMany({
     where: { tenantId: req.params.id }
   });
   res.json(records);
-});
+}));
 
-app.get('/api/tenants/:id/payments', async (req, res) => {
+app.get('/api/tenants/:id/payments', requireAuth, wrap(async (req, res) => {
   const records = await prisma.tenantPayment.findMany({
     where: { tenantId: req.params.id }
   });
   res.json(records);
-});
+}));
 
-app.get('/api/tenants/:id/documents', async (req, res) => {
+app.get('/api/tenants/:id/documents', requireAuth, wrap(async (req, res) => {
   const records = await prisma.tenantDocument.findMany({
     where: { tenantId: req.params.id }
   });
   res.json(records);
-});
+}));
 
 // Seed an initial dummy property just for UI display
+if (process.env.NODE_ENV !== 'production') {
 app.post('/api/seed', async (req, res) => {
   try {
     const owner = await prisma.user.create({
@@ -508,18 +592,27 @@ app.post('/api/seed', async (req, res) => {
     res.status(500).json({ error: String(err) });
   }
 });
+}
 
 // ─── Socket.io Connection Logic ───────────────────────────────────────
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  try {
+    const p = jwt.verify(token, JWT_SECRET!) as { sub: string };
+    (socket as any).userId = p.sub;
+    next();
+  } catch { next(new Error('unauthorized')); }
+});
+
 io.on('connection', (socket) => {
-  const userId = socket.handshake.query.userId;
-  if (userId) {
-    socket.join(String(userId));
-    console.log(`⚡ User connected: ${userId} joined room ${userId}`);
-  }
+  const userId = (socket as any).userId;
+  socket.join(String(userId));
+  console.log(`⚡ User connected: ${userId} joined room ${userId}`);
 
   socket.on('send-message', async (data) => {
     try {
-      const { text, senderId, receiverId } = data;
+      const { text, receiverId } = data;
+      const senderId = userId; // from token — client can no longer impersonate
       const message = await prisma.message.create({
         data: { text, senderId, receiverId }
       });
@@ -532,14 +625,12 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    if (userId) {
-      console.log(`🔌 User disconnected: ${userId}`);
-    }
+    console.log(`🔌 User disconnected: ${userId}`);
   });
 });
 
 // ─── Chat APIs ────────────────────────────────────────────────────────
-app.get('/api/chat', async (req, res) => {
+app.get('/api/chat', requireAuth, wrap(async (req, res) => {
   try {
     const { user1, user2 } = req.query;
     if (!user1 || !user2) {
@@ -559,9 +650,9 @@ app.get('/api/chat', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', requireAuth, wrap(async (req, res) => {
   try {
     const { text, senderId, receiverId } = req.body;
     if (!text || !senderId || !receiverId) {
@@ -576,10 +667,10 @@ app.post('/api/chat', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
 // ─── Maintenance Update API ───────────────────────────────────────────
-app.put('/api/maintenance/:id', async (req, res) => {
+app.put('/api/maintenance/:id', requireAuth, wrap(async (req, res) => {
   try {
     const { status } = req.body;
     if (!status) {
@@ -599,10 +690,10 @@ app.put('/api/maintenance/:id', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
 // ─── Broadcast API ───────────────────────────────────────────────────
-app.post('/api/broadcast', async (req, res) => {
+app.post('/api/broadcast', requireAuth, wrap(async (req, res) => {
   try {
     const { text, title } = req.body;
     if (!text) {
@@ -619,16 +710,16 @@ app.post('/api/broadcast', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
 // ─── AI Integrations ─────────────────────────────────────────────────
-app.post('/api/ai/description', async (req, res) => {
+app.post('/api/ai/description', requireAuth, wrap(async (req, res) => {
   const { title, beds, type, location, furnishedStatus, amenities } = req.body;
   const description = `This premium ${furnishedStatus || 'unfurnished'} ${beds} BHK ${type || 'apartment'} is located in the sought-after neighborhood of ${location || 'NYC'}. Key features include: ${amenities || 'spacious design, parking, high ceilings'}. Ideal for families or working professionals seeking a comfortable home.`;
   res.json({ description });
-});
+}));
 
-app.post('/api/ai/search', async (req, res) => {
+app.post('/api/ai/search', requireAuth, wrap(async (req, res) => {
   try {
     const { query } = req.body;
     if (!query) return res.json([]);
@@ -669,7 +760,7 @@ app.post('/api/ai/search', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
 app.post('/api/ai/faq', (req, res) => {
   const { question } = req.body;
@@ -690,7 +781,7 @@ app.post('/api/ai/faq', (req, res) => {
 });
 
 // ─── Payment Gateway Integration (Razorpay Mock) ──────────────────────
-app.post('/api/payments/pay', async (req, res) => {
+app.post('/api/payments/pay', requireAuth, wrap(async (req, res) => {
   try {
     const { tenantId, amount, type } = req.body;
     if (!tenantId || !amount || !type) {
@@ -709,10 +800,10 @@ app.post('/api/payments/pay', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
 // ─── Favorites Management ───────────────────────────────────────────
-app.post('/api/users/:id/favorites', async (req, res) => {
+app.post('/api/users/:id/favorites', requireAuth, wrap(async (req, res) => {
   try {
     const { id } = req.params;
     const { propertyId } = req.body;
@@ -742,10 +833,10 @@ app.post('/api/users/:id/favorites', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
 // ─── Checklist Management ───────────────────────────────────────────
-app.put('/api/users/:id/checklist', async (req, res) => {
+app.put('/api/users/:id/checklist', requireAuth, wrap(async (req, res) => {
   try {
     const { id } = req.params;
     const { role, checklist } = req.body; // role: 'tenant' | 'owner', checklist: JSON object
@@ -770,10 +861,10 @@ app.put('/api/users/:id/checklist', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
 // ─── Split Rent Management ───────────────────────────────────────────
-app.put('/api/users/:id/split-rent', async (req, res) => {
+app.put('/api/users/:id/split-rent', requireAuth, wrap(async (req, res) => {
   try {
     const { id } = req.params;
     const { splitRent } = req.body; // JSON object/array
@@ -790,10 +881,10 @@ app.put('/api/users/:id/split-rent', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
 // ─── Visitor Management ──────────────────────────────────────────────
-app.post('/api/visitors', async (req, res) => {
+app.post('/api/visitors', requireAuth, wrap(async (req, res) => {
   try {
     const { name, phone, tenantId } = req.body;
     const visitor = await prisma.visitor.create({
@@ -809,9 +900,9 @@ app.post('/api/visitors', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
-app.get('/api/visitors/tenant/:tenantId', async (req, res) => {
+app.get('/api/visitors/tenant/:tenantId', requireAuth, wrap(async (req, res) => {
   try {
     const visitors = await prisma.visitor.findMany({
       where: { tenantId: req.params.tenantId },
@@ -821,9 +912,9 @@ app.get('/api/visitors/tenant/:tenantId', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
-app.put('/api/visitors/:id/scan', async (req, res) => {
+app.put('/api/visitors/:id/scan', requireAuth, wrap(async (req, res) => {
   try {
     const { id } = req.params;
     const visitor = await prisma.visitor.findUnique({ where: { id } });
@@ -849,10 +940,10 @@ app.put('/api/visitors/:id/scan', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
 // ─── Inventory Management ─────────────────────────────────────────────
-app.get('/api/properties/:id/inventory', async (req, res) => {
+app.get('/api/properties/:id/inventory', requireAuth, wrap(async (req, res) => {
   try {
     const inventory = await prisma.inventoryItem.findMany({
       where: { propertyId: req.params.id }
@@ -861,9 +952,9 @@ app.get('/api/properties/:id/inventory', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
-app.post('/api/properties/:id/inventory', async (req, res) => {
+app.post('/api/properties/:id/inventory', requireAuth, wrap(async (req, res) => {
   try {
     const { name, status } = req.body;
     const item = await prisma.inventoryItem.create({
@@ -878,9 +969,9 @@ app.post('/api/properties/:id/inventory', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
-app.put('/api/inventory/:id/acknowledge', async (req, res) => {
+app.put('/api/inventory/:id/acknowledge', requireAuth, wrap(async (req, res) => {
   try {
     const { role } = req.body; // 'owner' | 'tenant'
     const data: any = {};
@@ -895,10 +986,10 @@ app.put('/api/inventory/:id/acknowledge', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
 // ─── Reviews & Ratings ────────────────────────────────────────────────
-app.post('/api/reviews', async (req, res) => {
+app.post('/api/reviews', requireAuth, wrap(async (req, res) => {
   try {
     const { rating, comment, authorId, targetId, targetType } = req.body;
     const review = await prisma.review.create({
@@ -908,9 +999,9 @@ app.post('/api/reviews', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
-app.get('/api/reviews/:targetId', async (req, res) => {
+app.get('/api/reviews/:targetId', requireAuth, wrap(async (req, res) => {
   try {
     const reviews = await prisma.review.findMany({
       where: { targetId: req.params.targetId },
@@ -920,10 +1011,10 @@ app.get('/api/reviews/:targetId', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
 // ─── Owner Dashboard Stats ────────────────────────────────────────────
-app.get('/api/owner/:ownerId/dashboard-stats', async (req, res) => {
+app.get('/api/owner/:ownerId/dashboard-stats', requireAuth, wrap(async (req, res) => {
   try {
     const { ownerId } = req.params;
     const properties = await prisma.property.findMany({
@@ -983,10 +1074,10 @@ app.get('/api/owner/:ownerId/dashboard-stats', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
 // ─── Digital Agreement SIGN ──────────────────────────────────────────
-app.post('/api/agreement', async (req, res) => {
+app.post('/api/agreement', requireAuth, wrap(async (req, res) => {
   try {
     const { tenantId, rent, deposit, terms, duration } = req.body;
     const dateStr = new Date().toLocaleDateString();
@@ -1016,9 +1107,9 @@ app.post('/api/agreement', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
-app.put('/api/agreement/:id/sign', async (req, res) => {
+app.put('/api/agreement/:id/sign', requireAuth, wrap(async (req, res) => {
   try {
     const { signature, role } = req.body; // role: 'owner' | 'tenant'
     const data: any = {};
@@ -1048,10 +1139,10 @@ app.put('/api/agreement/:id/sign', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
 // ─── Admin Console APIs ──────────────────────────────────────────────
-app.get('/api/admin/stats', async (req, res) => {
+app.get('/api/admin/stats', requireAuth, requireRole('admin'), wrap(async (req, res) => {
   try {
     const usersCount = await prisma.user.count({ where: { role: 'customer' } });
     const ownersCount = await prisma.user.count({ where: { role: 'owner' } });
@@ -1073,9 +1164,9 @@ app.get('/api/admin/stats', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
-app.get('/api/admin/users', async (req, res) => {
+app.get('/api/admin/users', requireAuth, requireRole('admin'), wrap(async (req, res) => {
   try {
     const users = await prisma.user.findMany({
       orderBy: { createdAt: 'desc' }
@@ -1084,9 +1175,9 @@ app.get('/api/admin/users', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
-app.put('/api/admin/users/:id/block', async (req, res) => {
+app.put('/api/admin/users/:id/block', requireAuth, requireRole('admin'), wrap(async (req, res) => {
   try {
     const { id } = req.params;
     const user = await prisma.user.findUnique({ where: { id } });
@@ -1100,9 +1191,9 @@ app.put('/api/admin/users/:id/block', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
-app.post('/api/auth/profile/password', async (req, res) => {
+app.post('/api/auth/profile/password', requireAuth, wrap(async (req, res) => {
   try {
     const { userId, newPassword } = req.body;
     const updated = await prisma.user.update({
@@ -1113,9 +1204,17 @@ app.post('/api/auth/profile/password', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
+}));
 
 // Serve frontend statically in production
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  console.error(err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+process.on('unhandledRejection', (e) => console.error('unhandledRejection', e));
+process.on('uncaughtException', (e) => console.error('uncaughtException', e));
+
 app.use(express.static(path.join(__dirname, '../../web-app/dist')));
 
 app.get('*', (req, res) => {

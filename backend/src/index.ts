@@ -48,6 +48,10 @@ function requireRole(...roles: string[]) {
   };
 }
 
+function canAccessUser(req: Request, userId: string, ...roles: string[]) {
+  return req.auth?.userId === userId || roles.includes(req.auth?.role || '');
+}
+
 const wrap = (fn: RequestHandler): RequestHandler => (req: Request, res: Response, next: NextFunction) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -295,6 +299,7 @@ app.get('/api/tenants/:id', requireAuth, wrap(async (req, res) => {
 }));
 
 app.post('/api/users', requireAuth, wrap(async (req, res) => {
+  if (req.auth!.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   const { name, email, phone, role } = req.body;
   const user = await prisma.user.create({
     data: { name, email, phone, role }
@@ -341,135 +346,81 @@ app.post('/api/properties', requireAuth, requireRole('owner'), wrap(async (req, 
 }));
 
 app.get('/api/owner/:ownerId/properties', requireAuth, wrap(async (req, res) => {
-  try {
-    const { ownerId } = req.params;
-    const properties = await prisma.property.findMany({
-      where: { ownerId },
-      include: {
-        tenant: true
-      }
-    });
-    res.json(properties);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
+  const { ownerId } = req.params;
+  if (!canAccessUser(req, ownerId, 'admin')) return res.status(403).json({ error: 'Forbidden' });
+  const properties = await prisma.property.findMany({
+    where: { ownerId },
+    include: { tenant: true }
+  });
+  res.json(properties);
 }));
 
 app.delete('/api/properties/:id', requireAuth, wrap(async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    // Disassociate property from tenant users
-    await prisma.user.updateMany({
-      where: { propertyId: id },
-      data: { propertyId: null }
-    });
-    
-    // Delete booking requests associated with the property
-    await prisma.bookingRequest.deleteMany({
-      where: { propertyId: id }
-    });
-    
-    // Delete the property itself
-    await prisma.property.delete({
-      where: { id }
-    });
-    
-    res.json({ success: true, message: 'Property deleted successfully' });
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
+  const { id } = req.params;
+  const property = await prisma.property.findUnique({ where: { id } });
+  if (!property) return res.status(404).json({ error: 'Property not found' });
+  if (!canAccessUser(req, property.ownerId || '', 'admin')) return res.status(403).json({ error: 'Forbidden' });
+
+  await prisma.user.updateMany({ where: { propertyId: id }, data: { propertyId: null } });
+  await prisma.bookingRequest.deleteMany({ where: { propertyId: id } });
+  await prisma.property.delete({ where: { id } });
+  res.json({ success: true, message: 'Property deleted successfully' });
 }));
 
 // ─── Booking Requests ──────────────────────────────────────────────────
 
 app.post('/api/bookings', requireAuth, wrap(async (req, res) => {
-  try {
-    const { propertyId, customerId } = req.body;
-    if (!propertyId || !customerId) {
-      return res.status(400).json({ error: 'propertyId and customerId are required' });
-    }
-    const booking = await prisma.bookingRequest.create({
-      data: {
-        propertyId,
-        customerId,
-        status: 'Pending'
-      },
-      include: {
-        property: true,
-        customer: true
-      }
-    });
-    // Send a real-time notification to the owner if needed
-    const ownerId = booking.property.ownerId;
-    if (ownerId) {
-      io.to(String(ownerId)).emit('new-booking-request', booking);
-    }
-    res.json(booking);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
+  const { propertyId, customerId } = req.body;
+  if (!propertyId || !customerId) return res.status(400).json({ error: 'propertyId and customerId are required' });
+  if (!canAccessUser(req, customerId, 'owner', 'admin')) return res.status(403).json({ error: 'Forbidden' });
+  const booking = await prisma.bookingRequest.create({
+    data: { propertyId, customerId, status: 'Pending' },
+    include: { property: true, customer: true }
+  });
+  if (booking.property.ownerId) io.to(String(booking.property.ownerId)).emit('new-booking-request', booking);
+  res.json(booking);
 }));
 
 app.get('/api/owner/:ownerId/bookings', requireAuth, wrap(async (req, res) => {
-  try {
-    const bookings = await prisma.bookingRequest.findMany({
-      where: {
-        property: {
-          ownerId: req.params.ownerId
-        }
-      },
-      include: {
-        property: true,
-        customer: true
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-    res.json(bookings);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
+  if (!canAccessUser(req, req.params.ownerId, 'admin')) return res.status(403).json({ error: 'Forbidden' });
+  const bookings = await prisma.bookingRequest.findMany({
+    where: { property: { ownerId: req.params.ownerId } },
+    include: { property: true, customer: true },
+    orderBy: { createdAt: 'desc' }
+  });
+  res.json(bookings);
 }));
 
 app.get('/api/customer/:customerId/bookings', requireAuth, wrap(async (req, res) => {
-  try {
-    const { customerId } = req.params;
-    const bookings = await prisma.bookingRequest.findMany({
-      where: { customerId },
-      include: {
-        property: true,
-        customer: true
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-    res.json(bookings);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
+  const { customerId } = req.params;
+  if (!canAccessUser(req, customerId, 'admin')) return res.status(403).json({ error: 'Forbidden' });
+  const bookings = await prisma.bookingRequest.findMany({
+    where: { customerId },
+    include: { property: true, customer: true },
+    orderBy: { createdAt: 'desc' }
+  });
+  res.json(bookings);
 }));
 
 app.put('/api/bookings/:id', requireAuth, wrap(async (req, res) => {
-  try {
-    const { status } = req.body;
-    if (!status) {
-      return res.status(400).json({ error: 'status is required' });
-    }
-    const booking = await prisma.bookingRequest.update({
-      where: { id: req.params.id },
-      data: { status },
-      include: { property: true, customer: true }
-    });
-    // Notify customer
-    io.to(String(booking.customerId)).emit('booking-status-updated', booking);
-    res.json(booking);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
+  const { status } = req.body;
+  if (!status) return res.status(400).json({ error: 'status is required' });
+  const existing = await prisma.bookingRequest.findUnique({ where: { id: req.params.id }, include: { property: true } });
+  if (!existing) return res.status(404).json({ error: 'Booking not found' });
+  if (!canAccessUser(req, existing.property.ownerId || '', 'admin')) return res.status(403).json({ error: 'Forbidden' });
+  const booking = await prisma.bookingRequest.update({
+    where: { id: req.params.id },
+    data: { status },
+    include: { property: true, customer: true }
+  });
+  io.to(String(booking.customerId)).emit('booking-status-updated', booking);
+  res.json(booking);
 }));
 
 // ─── Tenant Records ──────────────────────────────────────────────────
 
 app.get('/api/tenants/:id/maintenance', requireAuth, wrap(async (req, res) => {
+  if (!canAccessUser(req, req.params.id, 'owner', 'admin')) return res.status(403).json({ error: 'Forbidden' });
   const records = await prisma.tenantMaintenance.findMany({
     where: { tenantId: req.params.id }
   });
@@ -500,6 +451,7 @@ app.post('/api/tenants/:id/maintenance', requireAuth, wrap(async (req, res) => {
 }));
 
 app.get('/api/tenants/:id/electricity', requireAuth, wrap(async (req, res) => {
+  if (!canAccessUser(req, req.params.id, 'owner', 'admin')) return res.status(403).json({ error: 'Forbidden' });
   const records = await prisma.tenantElectricity.findMany({
     where: { tenantId: req.params.id }
   });
@@ -507,6 +459,7 @@ app.get('/api/tenants/:id/electricity', requireAuth, wrap(async (req, res) => {
 }));
 
 app.get('/api/tenants/:id/payments', requireAuth, wrap(async (req, res) => {
+  if (!canAccessUser(req, req.params.id, 'owner', 'admin')) return res.status(403).json({ error: 'Forbidden' });
   const records = await prisma.tenantPayment.findMany({
     where: { tenantId: req.params.id }
   });
@@ -514,6 +467,7 @@ app.get('/api/tenants/:id/payments', requireAuth, wrap(async (req, res) => {
 }));
 
 app.get('/api/tenants/:id/documents', requireAuth, wrap(async (req, res) => {
+  if (!canAccessUser(req, req.params.id, 'owner', 'admin')) return res.status(403).json({ error: 'Forbidden' });
   const records = await prisma.tenantDocument.findMany({
     where: { tenantId: req.params.id }
   });
@@ -631,65 +585,46 @@ io.on('connection', (socket) => {
 
 // ─── Chat APIs ────────────────────────────────────────────────────────
 app.get('/api/chat', requireAuth, wrap(async (req, res) => {
-  try {
-    const { user1, user2 } = req.query;
-    if (!user1 || !user2) {
-      return res.status(400).json({ error: 'user1 and user2 query parameters are required' });
-    }
-
-    const messages = await prisma.message.findMany({
-      where: {
-        OR: [
-          { senderId: String(user1), receiverId: String(user2) },
-          { senderId: String(user2), receiverId: String(user1) }
-        ]
-      },
-      orderBy: { createdAt: 'asc' }
-    });
-    res.json(messages);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
+  const { user1, user2 } = req.query;
+  if (!user1 || !user2) return res.status(400).json({ error: 'user1 and user2 query parameters are required' });
+  if (req.auth!.userId !== String(user1) && req.auth!.userId !== String(user2))
+    return res.status(403).json({ error: 'Forbidden' });
+  const messages = await prisma.message.findMany({
+    where: {
+      OR: [
+        { senderId: String(user1), receiverId: String(user2) },
+        { senderId: String(user2), receiverId: String(user1) }
+      ]
+    },
+    orderBy: { createdAt: 'asc' }
+  });
+  res.json(messages);
 }));
 
 app.post('/api/chat', requireAuth, wrap(async (req, res) => {
-  try {
-    const { text, senderId, receiverId } = req.body;
-    if (!text || !senderId || !receiverId) {
-      return res.status(400).json({ error: 'text, senderId, and receiverId are required' });
-    }
-    const message = await prisma.message.create({
-      data: { text, senderId, receiverId }
-    });
-    io.to(receiverId).emit('new-message', message);
-    io.to(senderId).emit('new-message', message);
-    res.json(message);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
+  const { text, senderId, receiverId } = req.body;
+  if (!text || !senderId || !receiverId) return res.status(400).json({ error: 'text, senderId, and receiverId are required' });
+  if (req.auth!.userId !== senderId) return res.status(403).json({ error: 'Forbidden' });
+  const message = await prisma.message.create({ data: { text, senderId, receiverId } });
+  io.to(receiverId).emit('new-message', message);
+  io.to(senderId).emit('new-message', message);
+  res.json(message);
 }));
 
 // ─── Maintenance Update API ───────────────────────────────────────────
 app.put('/api/maintenance/:id', requireAuth, wrap(async (req, res) => {
-  try {
-    const { status } = req.body;
-    if (!status) {
-      return res.status(400).json({ error: 'status is required' });
-    }
-    const record = await prisma.tenantMaintenance.update({
-      where: { id: req.params.id },
-      data: { status }
-    });
-    io.emit('maintenance-update', {
-      id: record.id,
-      tenantId: record.tenantId,
-      status: record.status,
-      type: record.type
-    });
-    res.json(record);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
+  const { status } = req.body;
+  if (!status) return res.status(400).json({ error: 'status is required' });
+  const existing = await prisma.tenantMaintenance.findUnique({
+    where: { id: req.params.id },
+    include: { tenant: { include: { rentedProperty: true } } }
+  });
+  if (!existing) return res.status(404).json({ error: 'Maintenance request not found' });
+  const isOwner = existing.tenant.rentedProperty?.ownerId === req.auth!.userId;
+  if (req.auth!.role !== 'admin' && !isOwner) return res.status(403).json({ error: 'Forbidden' });
+  const record = await prisma.tenantMaintenance.update({ where: { id: req.params.id }, data: { status } });
+  io.emit('maintenance-update', { id: record.id, tenantId: record.tenantId, status: record.status, type: record.type });
+  res.json(record);
 }));
 
 // ─── Broadcast API ───────────────────────────────────────────────────
@@ -782,57 +717,35 @@ app.post('/api/ai/faq', (req, res) => {
 
 // ─── Payment Gateway Integration (Razorpay Mock) ──────────────────────
 app.post('/api/payments/pay', requireAuth, wrap(async (req, res) => {
-  try {
-    const { tenantId, amount, type } = req.body;
-    if (!tenantId || !amount || !type) {
-      return res.status(400).json({ error: 'tenantId, amount, and type are required' });
+  const { tenantId, amount, type } = req.body;
+  if (!tenantId || !amount || !type) return res.status(400).json({ error: 'tenantId, amount, and type are required' });
+  if (!canAccessUser(req, tenantId, 'owner', 'admin')) return res.status(403).json({ error: 'Forbidden' });
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) return res.status(400).json({ error: 'amount must be a positive number' });
+  const payment = await prisma.tenantPayment.create({
+    data: {
+      date: new Date().toLocaleDateString(),
+      amount: `₹${numericAmount}`,
+      type,
+      status: 'Paid',
+      tenantId
     }
-    const payment = await prisma.tenantPayment.create({
-      data: {
-        date: new Date().toLocaleDateString(),
-        amount: `₹${amount}`,
-        type,
-        status: 'Paid',
-        tenantId
-      }
-    });
-    res.json({ success: true, payment, receiptUrl: `/receipts/${payment.id}.pdf` });
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
+  });
+  res.json({ success: true, payment, receiptUrl: `/receipts/${payment.id}.pdf` });
 }));
 
 // ─── Favorites Management ───────────────────────────────────────────
 app.post('/api/users/:id/favorites', requireAuth, wrap(async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { propertyId } = req.body;
-    
-    if (!propertyId) {
-      return res.status(400).json({ error: 'propertyId is required' });
-    }
-    
-    const user = await prisma.user.findUnique({ where: { id } });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    let saved = user.savedProperties ? user.savedProperties.split(',').filter(Boolean) : [];
-    if (saved.includes(propertyId)) {
-      saved = saved.filter(p => p !== propertyId);
-    } else {
-      saved.push(propertyId);
-    }
-    
-    const updatedUser = await prisma.user.update({
-      where: { id },
-      data: { savedProperties: saved.join(',') }
-    });
-    
-    res.json({ success: true, savedProperties: updatedUser.savedProperties });
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
+  const { id } = req.params;
+  const { propertyId } = req.body;
+  if (!propertyId) return res.status(400).json({ error: 'propertyId is required' });
+  if (!canAccessUser(req, id, 'admin')) return res.status(403).json({ error: 'Forbidden' });
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  let saved = user.savedProperties ? user.savedProperties.split(',').filter(Boolean) : [];
+  saved = saved.includes(propertyId) ? saved.filter(p => p !== propertyId) : [...saved, propertyId];
+  const updatedUser = await prisma.user.update({ where: { id }, data: { savedProperties: saved.join(',') } });
+  res.json({ success: true, savedProperties: updatedUser.savedProperties });
 }));
 
 // ─── Checklist Management ───────────────────────────────────────────
@@ -840,6 +753,7 @@ app.put('/api/users/:id/checklist', requireAuth, wrap(async (req, res) => {
   try {
     const { id } = req.params;
     const { role, checklist } = req.body; // role: 'tenant' | 'owner', checklist: JSON object
+    if (!canAccessUser(req, id, 'admin')) return res.status(403).json({ error: 'Forbidden' });
     
     const data: any = {};
     if (role === 'owner') {
@@ -868,6 +782,7 @@ app.put('/api/users/:id/split-rent', requireAuth, wrap(async (req, res) => {
   try {
     const { id } = req.params;
     const { splitRent } = req.body; // JSON object/array
+    if (!canAccessUser(req, id, 'admin')) return res.status(403).json({ error: 'Forbidden' });
     
     const updatedUser = await prisma.user.update({
       where: { id },
@@ -885,107 +800,81 @@ app.put('/api/users/:id/split-rent', requireAuth, wrap(async (req, res) => {
 
 // ─── Visitor Management ──────────────────────────────────────────────
 app.post('/api/visitors', requireAuth, wrap(async (req, res) => {
-  try {
-    const { name, phone, tenantId } = req.body;
-    const visitor = await prisma.visitor.create({
-      data: {
-        name,
-        phone,
-        qrCode: `VISITOR-${Math.floor(100000 + Math.random()*900000)}`,
-        status: 'Invited',
-        tenantId
-      }
-    });
-    res.json(visitor);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
+  const { name, phone, tenantId } = req.body;
+  if (!name || !phone || !tenantId) return res.status(400).json({ error: 'name, phone, and tenantId are required' });
+  if (!canAccessUser(req, tenantId, 'admin')) return res.status(403).json({ error: 'Forbidden' });
+  const visitor = await prisma.visitor.create({
+    data: { name, phone, qrCode: `VISITOR-${crypto.randomInt(100000, 1000000)}`, status: 'Invited', tenantId }
+  });
+  res.json(visitor);
 }));
 
 app.get('/api/visitors/tenant/:tenantId', requireAuth, wrap(async (req, res) => {
-  try {
-    const visitors = await prisma.visitor.findMany({
-      where: { tenantId: req.params.tenantId },
-      orderBy: { id: 'desc' }
-    });
-    res.json(visitors);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
+  if (!canAccessUser(req, req.params.tenantId, 'owner', 'admin')) return res.status(403).json({ error: 'Forbidden' });
+  const visitors = await prisma.visitor.findMany({ where: { tenantId: req.params.tenantId }, orderBy: { id: 'desc' } });
+  res.json(visitors);
 }));
 
 app.put('/api/visitors/:id/scan', requireAuth, wrap(async (req, res) => {
-  try {
-    const { id } = req.params;
-    const visitor = await prisma.visitor.findUnique({ where: { id } });
-    if (!visitor) return res.status(404).json({ error: 'Visitor not found' });
-    
-    let newStatus = 'Entered';
-    let entryTime = visitor.entryTime;
-    let exitTime = visitor.exitTime;
-    
-    if (visitor.status === 'Invited') {
-      newStatus = 'Entered';
-      entryTime = new Date();
-    } else if (visitor.status === 'Entered') {
-      newStatus = 'Exited';
-      exitTime = new Date();
-    }
-    
-    const updated = await prisma.visitor.update({
-      where: { id },
-      data: { status: newStatus, entryTime, exitTime }
-    });
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
+  const visitor = await prisma.visitor.findUnique({ where: { id: req.params.id } });
+  if (!visitor) return res.status(404).json({ error: 'Visitor not found' });
+  if (req.auth!.role === 'owner') {
+    const tenant = await prisma.user.findUnique({ where: { id: visitor.tenantId }, include: { rentedProperty: true } });
+    if (tenant?.rentedProperty?.ownerId !== req.auth!.userId) return res.status(403).json({ error: 'Forbidden' });
+  } else if (!canAccessUser(req, visitor.tenantId, 'admin')) {
+    return res.status(403).json({ error: 'Forbidden' });
   }
+  let newStatus = 'Entered';
+  let entryTime = visitor.entryTime;
+  let exitTime = visitor.exitTime;
+  if (visitor.status === 'Invited') {
+    entryTime = new Date();
+  } else if (visitor.status === 'Entered') {
+    newStatus = 'Exited';
+    exitTime = new Date();
+  }
+  const updated = await prisma.visitor.update({
+    where: { id: visitor.id },
+    data: { status: newStatus, entryTime, exitTime }
+  });
+  res.json(updated);
 }));
 
 // ─── Inventory Management ─────────────────────────────────────────────
 app.get('/api/properties/:id/inventory', requireAuth, wrap(async (req, res) => {
-  try {
-    const inventory = await prisma.inventoryItem.findMany({
-      where: { propertyId: req.params.id }
-    });
-    res.json(inventory);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
+  const property = await prisma.property.findUnique({ where: { id: req.params.id } });
+  if (!property) return res.status(404).json({ error: 'Property not found' });
+  const tenant = await prisma.user.findUnique({ where: { id: req.auth!.userId }, select: { propertyId: true } });
+  if (!canAccessUser(req, property.ownerId || '', 'admin') && tenant?.propertyId !== property.id)
+    return res.status(403).json({ error: 'Forbidden' });
+  res.json(await prisma.inventoryItem.findMany({ where: { propertyId: req.params.id } }));
 }));
 
 app.post('/api/properties/:id/inventory', requireAuth, wrap(async (req, res) => {
-  try {
-    const { name, status } = req.body;
-    const item = await prisma.inventoryItem.create({
-      data: {
-        name,
-        status: status || 'Good',
-        acknowledgedByOwner: true,
-        propertyId: req.params.id
-      }
-    });
-    res.json(item);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
+  const property = await prisma.property.findUnique({ where: { id: req.params.id } });
+  if (!property) return res.status(404).json({ error: 'Property not found' });
+  if (!canAccessUser(req, property.ownerId || '')) return res.status(403).json({ error: 'Forbidden' });
+  const { name, status } = req.body;
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  const item = await prisma.inventoryItem.create({
+    data: { name, status: status || 'Good', acknowledgedByOwner: true, propertyId: req.params.id }
+  });
+  res.json(item);
 }));
 
 app.put('/api/inventory/:id/acknowledge', requireAuth, wrap(async (req, res) => {
-  try {
-    const { role } = req.body; // 'owner' | 'tenant'
-    const data: any = {};
-    if (role === 'owner') data.acknowledgedByOwner = true;
-    if (role === 'tenant') data.acknowledgedByTenant = true;
-    
-    const item = await prisma.inventoryItem.update({
-      where: { id: req.params.id },
-      data
-    });
-    res.json(item);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
+  const { role } = req.body;
+  if (role !== 'owner' && role !== 'tenant') return res.status(400).json({ error: 'role must be owner or tenant' });
+  const item = await prisma.inventoryItem.findUnique({ where: { id: req.params.id }, include: { property: true } });
+  if (!item) return res.status(404).json({ error: 'Inventory item not found' });
+  if (role === 'owner') {
+    if (!canAccessUser(req, item.property.ownerId || '', 'admin')) return res.status(403).json({ error: 'Forbidden' });
+  } else {
+    const tenant = await prisma.user.findUnique({ where: { id: req.auth!.userId } });
+    if (!tenant || tenant.propertyId !== item.propertyId) return res.status(403).json({ error: 'Forbidden' });
   }
+  const data = role === 'owner' ? { acknowledgedByOwner: true } : { acknowledgedByTenant: true };
+  res.json(await prisma.inventoryItem.update({ where: { id: item.id }, data }));
 }));
 
 // ─── Reviews & Ratings ────────────────────────────────────────────────
@@ -1017,6 +906,7 @@ app.get('/api/reviews/:targetId', requireAuth, wrap(async (req, res) => {
 app.get('/api/owner/:ownerId/dashboard-stats', requireAuth, wrap(async (req, res) => {
   try {
     const { ownerId } = req.params;
+    if (!canAccessUser(req, ownerId, 'admin')) return res.status(403).json({ error: 'Forbidden' });
     const properties = await prisma.property.findMany({
       where: { ownerId },
       include: { tenant: true, bookingRequests: true }
@@ -1080,6 +970,7 @@ app.get('/api/owner/:ownerId/dashboard-stats', requireAuth, wrap(async (req, res
 app.post('/api/agreement', requireAuth, wrap(async (req, res) => {
   try {
     const { tenantId, rent, deposit, terms, duration } = req.body;
+    if (!tenantId || !canAccessUser(req, tenantId, 'owner', 'admin')) return res.status(403).json({ error: 'Forbidden' });
     const dateStr = new Date().toLocaleDateString();
     
     // Delete any existing agreement to avoid unique constraint error
@@ -1112,6 +1003,7 @@ app.post('/api/agreement', requireAuth, wrap(async (req, res) => {
 app.put('/api/agreement/:id/sign', requireAuth, wrap(async (req, res) => {
   try {
     const { signature, role } = req.body; // role: 'owner' | 'tenant'
+    if (!signature || (role !== 'owner' && role !== 'tenant')) return res.status(400).json({ error: 'signature and valid role are required' });
     const data: any = {};
     if (role === 'owner') {
       data.ownerSignature = signature;
@@ -1121,6 +1013,13 @@ app.put('/api/agreement/:id/sign', requireAuth, wrap(async (req, res) => {
     
     // If both signatures present, mark status as Active
     const agreement = await prisma.tenantAgreement.findUnique({ where: { id: req.params.id } });
+    if (!agreement) return res.status(404).json({ error: 'Agreement not found' });
+    const tenant = await prisma.user.findUnique({ where: { id: agreement.tenantId }, select: { propertyId: true } });
+    const property = tenant?.propertyId ? await prisma.property.findUnique({ where: { id: tenant.propertyId }, select: { ownerId: true } }) : null;
+    const allowed = role === 'tenant'
+      ? req.auth!.userId === agreement.tenantId
+      : canAccessUser(req, property?.ownerId || '', 'admin');
+    if (!allowed) return res.status(403).json({ error: 'Forbidden' });
     if (agreement) {
       const isOwnerSigned = role === 'owner' ? !!signature : !!agreement.ownerSignature;
       const isTenantSigned = role === 'tenant' ? !!signature : !!agreement.tenantSignature;

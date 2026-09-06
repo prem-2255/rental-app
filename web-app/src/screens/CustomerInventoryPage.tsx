@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 interface InventoryItem {
@@ -16,7 +16,7 @@ const CustomerInventoryPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [propertyId, setPropertyId] = useState('');
 
-  const loadInventory = async (propId: string) => {
+  const loadInventory = useCallback(async (propId: string) => {
     try {
       const res = await fetch(`/api/properties/${propId}/inventory`);
       const data = await res.json();
@@ -43,9 +43,9 @@ const CustomerInventoryPage: React.FC = () => {
       console.error(err);
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchTenantDetails = async (tenantId: string) => {
+  const fetchTenantDetails = useCallback(async (tenantId: string) => {
     try {
       const res = await fetch(`/api/tenants/${tenantId}`);
       const data = await res.json();
@@ -59,7 +59,7 @@ const CustomerInventoryPage: React.FC = () => {
       console.error(err);
       setLoading(false);
     }
-  };
+  }, [loadInventory]);
 
   useEffect(() => {
     const stored = localStorage.getItem('currentUser');
@@ -69,7 +69,7 @@ const CustomerInventoryPage: React.FC = () => {
     } else {
       Promise.resolve().then(() => setLoading(false));
     }
-  }, []);
+  }, [fetchTenantDetails]);
 
   const handleAcknowledge = async (id: string) => {
     try {

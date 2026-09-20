@@ -1,0 +1,16 @@
+# Local operating-system and editor files
+.DS_Store
+.idea/
+.vscode/
+
+# Logs and local runtime output
+*.log
+
+# Dependencies and build output
+node_modules/
+dist/
+
+# Local environment and database files
+.env
+*.db
+*.db-journal

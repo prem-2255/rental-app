@@ -1,0 +1,75 @@
+.marketplace-page {
+  --ink: #1b2b21;
+  --muted: #64756a;
+  --canvas: #f8f7f2;
+  --surface: #ffffff;
+  --line: #dce5dd;
+  --green: #1f7a5a;
+  --green-deep: #155b43;
+  --green-soft: #e4f1e9;
+  background: var(--canvas);
+  color: var(--ink);
+  min-height: 100vh;
+  padding-top: 80px;
+}
+.marketplace-page button, .marketplace-page input, .marketplace-page select { font: inherit; }
+.marketplace-hero { align-items: center; display: grid; gap: 4.5rem; grid-template-columns: minmax(0, 1.05fr) minmax(340px, .95fr); margin: 0 auto; max-width: 1240px; padding: 5.5rem 3rem 3.5rem; }
+.eyebrow { color: var(--green); font-size: .75rem; font-weight: 800; letter-spacing: .11em; margin: 0 0 1rem; text-transform: uppercase; }
+.marketplace-hero h1, .paths-section h2, .workflow-section h2, .owner-callout h2 { color: var(--ink); font-family: Georgia, 'Times New Roman', serif; font-weight: 500; letter-spacing: -.055em; }
+.marketplace-hero h1 { font-size: clamp(3.3rem, 5vw, 5.15rem); line-height: .98; margin: 0; max-width: 610px; }
+.marketplace-hero h1 em { color: var(--green); font-style: italic; }
+.hero-description { color: var(--muted); font-size: 1.08rem; line-height: 1.65; margin: 1.7rem 0 0; max-width: 540px; }
+.home-search { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 15px 35px rgba(27, 43, 33, .09); display: grid; gap: .25rem; grid-template-columns: 1.15fr .9fr .75fr auto; margin-top: 2rem; padding: .6rem; }
+.home-search label { border-right: 1px solid var(--line); display: block; min-width: 0; padding: .4rem .8rem; }
+.home-search label:nth-of-type(3) { border-right: 0; }
+.home-search label span { color: var(--muted); display: block; font-size: .66rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.home-search input, .home-search select { background: transparent; border: 0; color: var(--ink); font-size: .86rem; font-weight: 700; margin-top: .25rem; outline: none; padding: 0; width: 100%; }
+.select-control { display: block; margin-top: .25rem; position: relative; }
+.select-control::after { color: var(--green); content: '⌄'; font-size: .9rem; font-weight: 900; line-height: 1; pointer-events: none; position: absolute; right: .38rem; top: 50%; transform: translateY(-54%); }
+.home-search .select-control select { appearance: none; background: #f1f6f2; border: 1px solid transparent; border-radius: 7px; cursor: pointer; font-size: .78rem; letter-spacing: -.025em; margin: 0; padding: .38rem 1.2rem .38rem .38rem; transition: background .2s ease, border-color .2s ease; }
+.home-search .select-control select:hover { background: #e7f1e9; }
+.home-search .select-control select:focus-visible { border-color: var(--green); outline: 2px solid rgba(31, 122, 90, .2); outline-offset: 1px; }
+.home-search button, .owner-callout button { background: var(--green); border: 0; border-radius: 10px; color: #fff; cursor: pointer; font-size: .84rem; font-weight: 800; padding: .9rem 1.05rem; transition: background .2s ease, transform .2s ease; white-space: nowrap; }
+.home-search button:hover, .owner-callout button:hover { background: var(--green-deep); transform: translateY(-1px); }
+.owner-inline-link { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: .82rem; margin: .95rem 0 0; padding: 0; text-align: left; }
+.owner-inline-link span { color: var(--green); font-weight: 800; }
+.featured-home { border-radius: 25px; box-shadow: 0 22px 45px rgba(23, 54, 37, .14); min-height: 420px; overflow: hidden; position: relative; }
+.featured-home::after { background: linear-gradient(180deg, transparent 35%, rgba(14, 30, 20, .66)); content: ''; inset: 0; position: absolute; }
+.featured-home img { height: 100%; min-height: 420px; object-fit: cover; position: absolute; width: 100%; }
+.listing-preview { background: rgba(255, 255, 255, .96); border-radius: 15px; bottom: 1.35rem; box-shadow: 0 14px 28px rgba(9, 30, 18, .22); left: 1.35rem; padding: 1rem 1.1rem; position: absolute; right: 1.35rem; z-index: 1; }
+.listing-topline { align-items: center; color: var(--green); display: flex; font-size: .69rem; font-weight: 800; justify-content: space-between; letter-spacing: .04em; text-transform: uppercase; }
+.listing-topline b { background: var(--green-soft); border-radius: 100px; padding: .3rem .55rem; }
+.listing-preview h2 { font-size: 1rem; letter-spacing: -.025em; margin: .55rem 0 .25rem; }
+.listing-preview p { color: var(--muted); font-size: .78rem; margin: 0; }
+.listing-preview > strong { display: block; font-size: 1.1rem; margin-top: .75rem; }
+.listing-preview strong small { color: var(--muted); font-size: .7rem; font-weight: 600; }
+.trust-strip { border-bottom: 1px solid var(--line); display: grid; gap: 1.25rem; grid-template-columns: repeat(3, 1fr); margin: 0 auto; max-width: 1240px; padding: 1.5rem 3rem 3.5rem; }
+.trust-strip article { align-items: center; display: flex; gap: .7rem; }
+.trust-strip article > span { align-items: center; background: var(--green-soft); border-radius: 50%; color: var(--green); display: flex; flex: 0 0 1.7rem; font-weight: 900; height: 1.7rem; justify-content: center; }
+.trust-strip p { color: var(--muted); font-size: .76rem; line-height: 1.5; margin: 0; }
+.trust-strip b { color: var(--ink); }
+.paths-section, .workflow-section { margin: 0 auto; max-width: 1240px; padding: 5.2rem 3rem; }
+.section-heading { align-items: end; display: flex; gap: 3rem; justify-content: space-between; }
+.paths-section h2, .workflow-section h2, .owner-callout h2 { font-size: clamp(2.25rem, 3.4vw, 3.15rem); line-height: 1.03; margin: 0; max-width: 630px; }
+.section-heading > p { color: var(--muted); font-size: .9rem; line-height: 1.6; margin: 0; max-width: 330px; }
+.path-grid { display: grid; gap: 1.25rem; grid-template-columns: repeat(2, 1fr); margin-top: 2.25rem; }
+.path-card { background: var(--surface); border: 1px solid var(--line); border-radius: 17px; cursor: pointer; min-height: 215px; padding: 1.6rem; text-align: left; transition: border .2s ease, box-shadow .2s ease, transform .2s ease; }
+.path-card:hover { border-color: var(--green); box-shadow: 0 14px 28px rgba(25, 74, 50, .09); transform: translateY(-3px); }
+.path-card > span { color: var(--green); font-size: .67rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.path-card h3 { color: var(--ink); font-size: 1.35rem; letter-spacing: -.035em; margin: .65rem 0 .45rem; }
+.path-card p { color: var(--muted); font-size: .86rem; line-height: 1.55; margin: 0; max-width: 430px; }
+.path-card b { color: var(--green); display: block; font-size: .8rem; margin-top: 1.25rem; }
+.owner-path { background: #f0f5ef; }
+.workflow-section { border-top: 1px solid var(--line); }
+.workflow-section > .eyebrow, .workflow-section > h2 { text-align: center; margin-left: auto; margin-right: auto; }
+.workflow-grid { display: grid; gap: 2rem; grid-template-columns: repeat(3, 1fr); margin-top: 2.8rem; }
+.workflow-grid article { border-top: 2px solid var(--green); padding-top: 1rem; }
+.workflow-grid span { color: var(--green); font-size: .7rem; font-weight: 900; letter-spacing: .1em; }
+.workflow-grid h3 { color: var(--ink); font-size: 1.1rem; margin: .65rem 0 .45rem; }
+.workflow-grid p { color: var(--muted); font-size: .84rem; line-height: 1.55; margin: 0; }
+.owner-callout { align-items: center; background: var(--green-soft); display: flex; gap: 2rem; justify-content: space-between; margin: 0 auto; max-width: 1180px; padding: 3.2rem; }
+.owner-callout .eyebrow { margin-bottom: .75rem; }
+.owner-callout h2 { font-size: 2.45rem; }
+.owner-callout div > p:last-child { color: var(--muted); font-size: .93rem; line-height: 1.55; margin: .85rem 0 0; max-width: 600px; }
+@media (max-width: 900px) { .marketplace-hero { gap: 2.5rem; grid-template-columns: 1fr; padding-top: 3.5rem; } .featured-home, .featured-home img { min-height: 360px; } .trust-strip { grid-template-columns: 1fr; } }
+@media (max-width: 680px) { .marketplace-page { padding-top: 68px; } .marketplace-hero, .trust-strip, .paths-section, .workflow-section { padding-left: 1.25rem; padding-right: 1.25rem; } .marketplace-hero { padding-top: 2.8rem; } .marketplace-hero h1 { font-size: 3.2rem; } .home-search { grid-template-columns: 1fr 1fr; } .home-search label { border-right: 0; } .home-search button { grid-column: 1 / -1; } .section-heading, .owner-callout { align-items: flex-start; flex-direction: column; } .path-grid, .workflow-grid { grid-template-columns: 1fr; } .owner-callout { margin: 0; padding: 2.4rem 1.25rem; } .owner-callout h2 { font-size: 2.2rem; } }

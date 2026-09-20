@@ -55,7 +55,7 @@ const MoveInChecklistPage: React.FC = () => {
         fetch('/api/users')
           .then(res => res.json())
           .then(users => {
-            const firstTenant = users.find((x: any) => x.role === 'tenant');
+            const firstTenant = Array.isArray(users) ? users.find((x: any) => x.role === 'tenant' || x.role === 'customer') : null;
             if (firstTenant) {
               setTenantId(firstTenant.id);
               loadChecklist(firstTenant.id);
@@ -98,16 +98,14 @@ const MoveInChecklistPage: React.FC = () => {
   };
 
   const handleToggleCheck = async (item: keyof ChecklistState) => {
-    if (!tenantId) return;
-    
     if (role === 'tenant') {
       const updatedTenant = { ...tenantChecklist, [item]: !tenantChecklist[item] };
       setTenantChecklist(updatedTenant);
-      await saveChecklist(tenantId, 'tenant', updatedTenant);
+      if (tenantId) await saveChecklist(tenantId, 'tenant', updatedTenant);
     } else {
       const updatedOwner = { ...ownerChecklist, [item]: !ownerChecklist[item] };
       setOwnerChecklist(updatedOwner);
-      await saveChecklist(tenantId, 'owner', updatedOwner);
+      if (tenantId) await saveChecklist(tenantId, 'owner', updatedOwner);
     }
   };
 
@@ -141,7 +139,7 @@ const MoveInChecklistPage: React.FC = () => {
   return (
     <div className="checklist-page">
       <header className="page-header">
-        <button onClick={() => navigate(role === 'owner' ? '/owner' : '/customer')} className="back-button">
+        <button onClick={() => navigate(-1)} className="back-button">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="19" y1="12" x2="5" y2="12"></line>
             <polyline points="12 19 5 12 12 5"></polyline>
@@ -153,10 +151,6 @@ const MoveInChecklistPage: React.FC = () => {
 
       {loading ? (
         <div className="loading-state">Loading checklist details...</div>
-      ) : !tenantId ? (
-        <div className="empty-state">
-          <p>No tenant selected. Please open this from a tenant details profile in the owner portal.</p>
-        </div>
       ) : (
         <div className="checklist-container">
           {allDone && (
@@ -171,6 +165,7 @@ const MoveInChecklistPage: React.FC = () => {
 
           <div className="role-indicator">
             Currently acting as: <strong style={{ color: role === 'owner' ? '#4f46e5' : '#10b981', textTransform: 'capitalize' }}>{role}</strong>
+            {!tenantId && <span style={{ marginLeft: '0.5rem', color: '#64748b' }}>(Template Preview)</span>}
           </div>
 
           <div className="checklist-list">
@@ -179,7 +174,7 @@ const MoveInChecklistPage: React.FC = () => {
               const isOwnerChecked = ownerChecklist[item.key];
               
               return (
-                <div key={item.key} className="checklist-card">
+                <div key={item.key} className="checklist-card checklist-item">
                   <div className="item-detail">
                     <h3 className="item-title">{item.label}</h3>
                     <p className="item-desc">{item.desc}</p>
@@ -190,6 +185,9 @@ const MoveInChecklistPage: React.FC = () => {
                     <div className="status-col">
                       <span className="party-lbl">Tenant Approval</span>
                       <button 
+                        role="checkbox"
+                        aria-checked={isTenantChecked}
+                        aria-label={`Tenant Approval for ${item.label}`}
                         disabled={role !== 'tenant'}
                         onClick={() => handleToggleCheck(item.key)}
                         className={`check-toggle ${isTenantChecked ? 'checked' : ''} ${role !== 'tenant' ? 'disabled' : ''}`}
@@ -202,6 +200,9 @@ const MoveInChecklistPage: React.FC = () => {
                     <div className="status-col">
                       <span className="party-lbl">Owner Approval</span>
                       <button 
+                        role="checkbox"
+                        aria-checked={isOwnerChecked}
+                        aria-label={`Owner Approval for ${item.label}`}
                         disabled={role !== 'owner'}
                         onClick={() => handleToggleCheck(item.key)}
                         className={`check-toggle ${isOwnerChecked ? 'checked' : ''} ${role !== 'owner' ? 'disabled' : ''}`}

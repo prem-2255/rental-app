@@ -1,0 +1,13 @@
+{
+  "projectId": "f6500b45-0163-4e3d-9440-cc4c6633ffeb",
+  "type": "frontend",
+  "name": "Landing page — hero and navigation render correctly",
+  "planSteps": [
+    { "type": "action", "description": "Navigate to /" },
+    { "type": "assertion", "description": "The page title contains 'RentApp' or 'Rent' and a hero headline is visible" },
+    { "type": "assertion", "description": "The header nav contains links for 'Browse homes', 'For owners', and 'How it works'" },
+    { "type": "assertion", "description": "A 'Sign in' button and a 'List your property' button are visible in the header" },
+    { "type": "action", "description": "Click the 'About Us' link in the footer" },
+    { "type": "assertion", "description": "The URL changes to /about-us and an about page heading is visible" }
+  ]
+}

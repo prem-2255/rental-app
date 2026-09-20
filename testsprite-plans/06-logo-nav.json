@@ -1,0 +1,11 @@
+{
+  "projectId": "f6500b45-0163-4e3d-9440-cc4c6633ffeb",
+  "type": "frontend",
+  "name": "Header logo — navigates home from any page",
+  "planSteps": [
+    { "type": "action", "description": "Navigate to /about-us" },
+    { "type": "assertion", "description": "The page heading or content indicates this is the About Us page" },
+    { "type": "action", "description": "Click the 'RentApp' logo in the header" },
+    { "type": "assertion", "description": "The URL changes to / and the landing page content is displayed" }
+  ]
+}

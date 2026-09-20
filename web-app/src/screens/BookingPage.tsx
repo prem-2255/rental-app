@@ -637,6 +637,7 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) =>
         }
         .booking-modal {
           background: white;
+          color: #0f172a;
           width: 90%;
           max-width: 650px;
           border-radius: 28px;
@@ -787,10 +788,14 @@ const BookingPage: React.FC<BookingPageProps> = ({ properties, currentUser }) =>
         .confirm-booking-btn { background: #10b981; border: none; padding: 0.75rem 1.5rem; border-radius: 12px; font-weight: 700; cursor: pointer; color: white; }
         .confirm-booking-btn:hover { background: #059669; }
 
-        .success-state { text-align: center; padding: 3rem 2rem; }
+        .success-state { color: #0f172a; text-align: center; padding: 3rem 2rem; }
+        .success-state h2 { color: #0f172a; font-size: 1.8rem; margin: 0 0 0.65rem; }
+        .success-state > p { color: #475569; line-height: 1.6; margin: 0; }
+        .success-state > p strong { color: #0f172a; }
         .success-icon-wrapper { width: 72px; height: 72px; background: #dcfce7; color: #10b981; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; }
         .success-svg { width: 36px; height: 36px; }
-        .owner-reminder { background: #f8fafc; border: 1px solid #e2e8f0; padding: 1rem; border-radius: 12px; display: flex; justify-content: space-between; margin: 1.5rem 0; font-size: 0.9rem; }
+        .owner-reminder { background: #f8fafc; border: 1px solid #e2e8f0; color: #0f172a; padding: 1rem; border-radius: 12px; display: flex; justify-content: space-between; margin: 1.5rem 0; font-size: 0.9rem; }
+        .owner-reminder span { color: #64748b; }
         .done-btn { background: #0f172a; color: white; border: none; padding: 0.75rem 2rem; border-radius: 12px; font-weight: 700; cursor: pointer; }
       `}</style>
     </div>

@@ -1,0 +1,16 @@
+{
+  "projectId": "f6500b45-0163-4e3d-9440-cc4c6633ffeb",
+  "type": "frontend",
+  "name": "Login modal — opens and accepts phone number input",
+  "planSteps": [
+    { "type": "action", "description": "Navigate to /" },
+    { "type": "action", "description": "Click the 'Sign in' button in the header" },
+    { "type": "assertion", "description": "A login modal or dialog appears on screen" },
+    { "type": "assertion", "description": "The modal contains a phone number input field and a role selection (Owner / Tenant)" },
+    { "type": "action", "description": "Select the 'Tenant' role option" },
+    { "type": "action", "description": "Type '9876543210' into the phone number input field" },
+    { "type": "assertion", "description": "The phone input field shows the value '9876543210'" },
+    { "type": "action", "description": "Click the Send OTP or Get OTP button" },
+    { "type": "assertion", "description": "An OTP input field appears, or a message is displayed asking to enter the OTP" }
+  ]
+}

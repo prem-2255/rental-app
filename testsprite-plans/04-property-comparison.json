@@ -1,0 +1,10 @@
+{
+  "projectId": "f6500b45-0163-4e3d-9440-cc4c6633ffeb",
+  "type": "frontend",
+  "name": "Property comparison page — loads without login",
+  "planSteps": [
+    { "type": "action", "description": "Navigate to /compare" },
+    { "type": "assertion", "description": "A property comparison page is shown with a heading containing 'Compare' or 'Comparison'" },
+    { "type": "assertion", "description": "There are at least two property comparison columns or cards visible, or a placeholder saying no properties are selected" }
+  ]
+}

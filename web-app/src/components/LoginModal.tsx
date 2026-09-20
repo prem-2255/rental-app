@@ -39,33 +39,35 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onLogin }) => {
   };
 
   const handleGoogleLogin = () => {
-    setStep('loading');
-    setLoadingMsg(`Redirecting to Google for ${role} login...`);
-    setTimeout(() => {
-      onLogin({
-        id: role === 'admin' ? 'mock-admin-id' : role === 'owner' ? 'mock-owner-id' : 'mock-customer-id',
-        name: `Google ${role === 'admin' ? 'Admin' : role === 'owner' ? 'Owner' : 'Customer'}`,
-        phone: '+91 99999 88888',
-        role: role
-      });
-      onClose();
-    }, 1500);
+    setError('Google sign-in is not configured. Use mobile OTP or email instead.');
   };
 
-  const handleEmailAuth = (e: React.FormEvent) => {
+  const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     setStep('loading');
-    setLoadingMsg(isSignUp ? `Creating original ${role} account...` : `Logging in as ${role}...`);
-    
-    setTimeout(() => {
-      onLogin({
-        id: role === 'admin' ? 'mock-admin-id' : role === 'owner' ? 'mock-owner-id' : 'mock-customer-id',
-        name: email.split('@')[0],
-        email: email,
-        role: role
+    setLoadingMsg(isSignUp ? `Creating your ${role} account...` : `Logging in as ${role}...`);
+
+    try {
+      const res = await fetch('/api/auth/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, role, action: isSignUp ? 'signup' : 'login' })
       });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data.error || 'Email authentication failed');
+        setStep('email-auth');
+        return;
+      }
+      localStorage.setItem('token', data.token);
+      onLogin(data.user);
       onClose();
-    }, 1500);
+    } catch (err) {
+      console.error('Email auth error:', err);
+      setError('Network error. Please try again.');
+      setStep('email-auth');
+    }
   };
 
   const handleGetOTP = async (e: React.FormEvent) => {

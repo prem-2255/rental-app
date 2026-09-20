@@ -27,13 +27,18 @@ function signToken(user: { id: string; role: string }) {
   return jwt.sign({ sub: user.id, role: user.role }, JWT_SECRET!, { expiresIn: '7d' });
 }
 
-function requireAuth(req: Request, res: Response, next: NextFunction) {
+async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
   try {
     const p = jwt.verify(token, JWT_SECRET!) as { sub: string; role: string };
-    req.auth = { userId: p.sub, role: p.role };
+    const user = await prisma.user.findUnique({
+      where: { id: p.sub },
+      select: { role: true, isBlocked: true }
+    });
+    if (!user || user.isBlocked) return res.status(401).json({ error: 'Account is unavailable' });
+    req.auth = { userId: p.sub, role: user.role };
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' });
@@ -180,6 +185,51 @@ app.post('/api/auth/verify-otp', otpLimiter, async (req, res) => {
         verified: false,
       },
       orderBy: { createdAt: 'desc' }
+    });
+
+    app.post('/api/auth/email', otpLimiter, async (req, res) => {
+      try {
+        const parsed = z.object({
+          email: z.string().email().max(254),
+          password: z.string().min(8).max(128),
+          role: z.enum(['customer', 'owner', 'admin']),
+          action: z.enum(['login', 'signup'])
+        }).safeParse(req.body);
+        if (!parsed.success) return res.status(400).json({ error: 'Enter a valid email, password, role, and action' });
+
+        const { email, password, role, action } = parsed.data;
+        const normalizedEmail = email.trim().toLowerCase();
+        let user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+
+        if (action === 'signup') {
+          if (role === 'admin') return res.status(403).json({ error: 'Admin accounts cannot be created here' });
+          if (user) return res.status(409).json({ error: 'An account with this email already exists' });
+          user = await prisma.user.create({
+            data: {
+              email: normalizedEmail,
+              password: await bcrypt.hash(password, 12),
+              name: normalizedEmail.split('@')[0],
+              role
+            }
+          });
+        } else {
+          if (!user?.password || !(await bcrypt.compare(password, user.password))) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+          }
+          if (user.role !== role) return res.status(403).json({ error: 'This account does not use the selected role' });
+          if (user.isBlocked) return res.status(401).json({ error: 'Account is unavailable' });
+        }
+
+        const token = signToken(user);
+        res.json({
+          success: true,
+          token,
+          user: { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role }
+        });
+      } catch (error) {
+        console.error('Email auth error:', error);
+        res.status(500).json({ error: 'Internal server error. Please try again.' });
+      }
     });
 
     if (!otpRecord) {
@@ -553,8 +603,13 @@ io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
   try {
     const p = jwt.verify(token, JWT_SECRET!) as { sub: string };
-    (socket as any).userId = p.sub;
-    next();
+    prisma.user.findUnique({ where: { id: p.sub }, select: { isBlocked: true } })
+      .then(user => {
+        if (!user || user.isBlocked) return next(new Error('unauthorized'));
+        (socket as any).userId = p.sub;
+        next();
+      })
+      .catch(() => next(new Error('unauthorized')));
   } catch { next(new Error('unauthorized')); }
 });
 
@@ -1093,16 +1148,16 @@ app.put('/api/admin/users/:id/block', requireAuth, requireRole('admin'), wrap(as
 }));
 
 app.post('/api/auth/profile/password', requireAuth, wrap(async (req, res) => {
-  try {
-    const { userId, newPassword } = req.body;
-    const updated = await prisma.user.update({
-      where: { id: userId },
-      data: { password: newPassword }
-    });
-    res.json({ success: true, message: 'Password updated successfully' });
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
+  const { userId, newPassword } = req.body;
+  if (userId !== req.auth!.userId && req.auth!.role !== 'admin')
+    return res.status(403).json({ error: 'Forbidden' });
+  if (typeof newPassword !== 'string' || newPassword.length < 8 || newPassword.length > 128)
+    return res.status(400).json({ error: 'Password must be between 8 and 128 characters' });
+  await prisma.user.update({
+    where: { id: userId },
+    data: { password: await bcrypt.hash(newPassword, 12) }
+  });
+  res.json({ success: true, message: 'Password updated successfully' });
 }));
 
 // Serve frontend statically in production

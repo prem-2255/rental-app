@@ -39,33 +39,35 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onLogin }) => {
   };
 
   const handleGoogleLogin = () => {
-    setStep('loading');
-    setLoadingMsg(`Redirecting to Google for ${role} login...`);
-    setTimeout(() => {
-      onLogin({
-        id: role === 'admin' ? 'mock-admin-id' : role === 'owner' ? 'mock-owner-id' : 'mock-customer-id',
-        name: `Google ${role === 'admin' ? 'Admin' : role === 'owner' ? 'Owner' : 'Customer'}`,
-        phone: '+91 99999 88888',
-        role: role
-      });
-      onClose();
-    }, 1500);
+    setError('Google sign-in is not configured. Use mobile OTP or email instead.');
   };
 
-  const handleEmailAuth = (e: React.FormEvent) => {
+  const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     setStep('loading');
-    setLoadingMsg(isSignUp ? `Creating original ${role} account...` : `Logging in as ${role}...`);
-    
-    setTimeout(() => {
-      onLogin({
-        id: role === 'admin' ? 'mock-admin-id' : role === 'owner' ? 'mock-owner-id' : 'mock-customer-id',
-        name: email.split('@')[0],
-        email: email,
-        role: role
+    setLoadingMsg(isSignUp ? `Creating your ${role} account...` : `Logging in as ${role}...`);
+
+    try {
+      const res = await fetch('/api/auth/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, role, action: isSignUp ? 'signup' : 'login' })
       });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data.error || 'Email authentication failed');
+        setStep('email-auth');
+        return;
+      }
+      localStorage.setItem('token', data.token);
+      onLogin(data.user);
       onClose();
-    }, 1500);
+    } catch (err) {
+      console.error('Email auth error:', err);
+      setError('Network error. Please try again.');
+      setStep('email-auth');
+    }
   };
 
   const handleGetOTP = async (e: React.FormEvent) => {
@@ -239,6 +241,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onLogin }) => {
             <h2 className="modal-title">Welcome</h2>
             <p className="modal-subtitle">Choose your role and sign in</p>
             {renderRolePicker()}
+            {error && <div className="otp-error">{error}</div>}
             <div className="login-options">
               <button className="auth-button google" onClick={handleGoogleLogin}>
                 <svg className="auth-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -273,11 +276,12 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onLogin }) => {
             <button type="button" className="back-btn" onClick={() => setStep('options')}>&larr; Back</button>
             <h2 className="modal-title">{isSignUp ? 'Create Account' : 'Welcome Back'}</h2>
             <p className="modal-subtitle">As a {role}</p>
+            {error && <div className="otp-error">{error}</div>}
             <div className="input-group">
               <input type="email" placeholder="Email Address" value={email} onChange={(e) => setEmail(e.target.value)} className="login-input" required autoFocus />
             </div>
             <div className="input-group">
-              <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="login-input" required />
+              <input type="password" placeholder="Password (8+ characters)" value={password} onChange={(e) => setPassword(e.target.value)} className="login-input" minLength={8} required />
             </div>
             <button type="submit" className="auth-button mobile">{isSignUp ? 'Sign Up' : 'Log In'}</button>
             <p className="auth-switch">

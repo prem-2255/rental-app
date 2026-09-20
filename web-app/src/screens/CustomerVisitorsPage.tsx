@@ -325,6 +325,7 @@ const CustomerVisitorsPage: React.FC = () => {
         }
         .qr-modal {
           background: white;
+          color: #0f172a;
           width: 90%;
           max-width: 400px;
           border-radius: 24px;
@@ -337,9 +338,9 @@ const CustomerVisitorsPage: React.FC = () => {
           justify-content: space-between;
           border-bottom: 1px solid #f1f5f9;
         }
-        .modal-header h2 { margin: 0; font-size: 1.25rem; }
+        .modal-header h2 { color: #0f172a; margin: 0; font-size: 1.25rem; }
         .close-x { background: none; border: none; font-size: 1.5rem; color: #94a3b8; cursor: pointer; }
-        .modal-body { padding: 2rem; text-align: center; }
+        .modal-body { color: #475569; padding: 2rem; text-align: center; }
         
         .qr-box {
           margin: 1.5rem 0;

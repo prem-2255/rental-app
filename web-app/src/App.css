@@ -16,7 +16,7 @@
   left: 0;
   width: 100%;
   height: 80px;
-  background: rgba(6, 11, 24, 0.85);
+  background: rgba(248, 247, 242, 0.94);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   display: flex;
@@ -24,8 +24,8 @@
   align-items: center;
   padding: 0 5%;
   z-index: 100;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  border-bottom: 1px solid #dce5dd;
+  box-shadow: 0 8px 25px rgba(24, 47, 33, 0.08);
 }
 
 .logo {
@@ -51,11 +51,11 @@
   width: 44px;
   height: 44px;
   border-radius: 14px;
-  background: linear-gradient(135deg, var(--aurora-green), var(--aurora-cyan));
+  background: #1f7a5a;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 20px rgba(0, 229, 160, 0.4);
+  box-shadow: 0 8px 18px rgba(31, 122, 90, 0.2);
   transition: transform 0.3s ease;
 }
 
@@ -66,7 +66,7 @@
 .logo-house {
   width: 24px;
   height: 24px;
-  color: var(--midnight);
+  color: #ffffff;
 }
 
 .logo-text-wrap {
@@ -76,11 +76,11 @@
   font-size: 2.1rem;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: #ffffff;
+  color: #1b2b21;
 }
 
 .logo-accent {
-  color: var(--aurora-green);
+  color: #1f7a5a;
   margin-left: 2px;
 }
 
@@ -93,7 +93,7 @@
 .nav-link {
   background: none;
   border: none;
-  color: var(--text-secondary);
+  color: #64756a;
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
@@ -103,27 +103,49 @@
 }
 
 .nav-link:hover {
-  color: var(--aurora-green);
+  color: #1f7a5a;
   transform: translateY(-1px);
 }
 
 .login-btn {
-  background: linear-gradient(135deg, var(--aurora-green), var(--aurora-cyan));
-  color: var(--midnight);
+  align-items: center;
+  background: #1f7a5a;
+  color: #ffffff;
   border: none;
   padding: 0.65rem 1.85rem;
   border-radius: var(--radius-pill);
   font-weight: 700;
   font-size: 0.95rem;
   cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  text-decoration: none;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 0 20px rgba(0, 229, 160, 0.25);
+  box-shadow: 0 8px 18px rgba(31, 122, 90, 0.2);
 }
 
 .login-btn:hover {
   transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 0 32px rgba(0, 229, 160, 0.45);
+  box-shadow: 0 10px 24px rgba(31, 122, 90, 0.3);
 }
+
+.header-actions {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+}
+
+.header-sign-in {
+  background: transparent;
+  border: 0;
+  color: #1b2b21;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.header-sign-in:hover { color: #1f7a5a; }
 
 .main-content {
   flex: 1;
@@ -1296,4 +1318,18 @@
 .submit-btn-step:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 25px rgba(0, 229, 160, 0.5);
+}
+
+@media (max-width: 760px) {
+  .app-header {
+    height: 68px;
+    padding: 0 1.25rem;
+  }
+
+  .logo-icon-badge { height: 36px; width: 36px; border-radius: 11px; }
+  .logo-house { height: 20px; width: 20px; }
+  .logo-text-wrap { font-size: 1.65rem; }
+  .app-nav, .header-sign-in { display: none; }
+  .header-actions { gap: 0; }
+  .login-btn { font-size: .8rem; padding: .58rem .8rem; }
 }

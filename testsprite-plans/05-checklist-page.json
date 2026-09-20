@@ -1,0 +1,10 @@
+{
+  "projectId": "f6500b45-0163-4e3d-9440-cc4c6633ffeb",
+  "type": "frontend",
+  "name": "Move-in checklist page — accessible without login",
+  "planSteps": [
+    { "type": "action", "description": "Navigate to /checklist" },
+    { "type": "assertion", "description": "A move-in checklist page is shown with a heading containing 'Checklist' or 'Move'" },
+    { "type": "assertion", "description": "At least one checklist item or checkbox is visible on the page" }
+  ]
+}

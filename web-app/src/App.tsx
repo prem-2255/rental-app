@@ -543,16 +543,21 @@ function App() {
             </div>
           </Link>
           <nav className="app-nav">
-            <Link to="/" className="nav-link">Home</Link>
+            <Link to="/book-rental" className="nav-link">Browse homes</Link>
+            <Link to="/owner" className="nav-link">For owners</Link>
+            <Link to="/#how-it-works" className="nav-link">How it works</Link>
             {userRole === 'admin' && (
               <Link to="/admin" className="nav-link" style={{ color: '#ea580c', fontWeight: 700 }}>Admin Console</Link>
             )}
-            <Link to="/profile" className="nav-link">Profile</Link>
+            {userRole && <Link to="/profile" className="nav-link">Profile</Link>}
           </nav>
           {userRole ? (
             <button className="login-btn" style={{ background: '#ef4444' }} onClick={handleLogout}>Log Out</button>
           ) : (
-            <button className="login-btn" onClick={openLogin}>Log In</button>
+            <div className="header-actions">
+              <button className="header-sign-in" onClick={openLogin}>Sign in</button>
+              <Link to="/owner" className="login-btn">List your property</Link>
+            </div>
           )}
         </header>
 
@@ -560,7 +565,7 @@ function App() {
           <Route path="/" element={
             userRole === 'owner' ? <Navigate to="/owner" replace /> :
             userRole === 'customer' ? <Navigate to="/customer" replace /> :
-            <LandingPage onOpenLogin={openLogin} onSetPlan={setUserPlan} />
+            <LandingPage onOpenLogin={openLogin} />
           } />
           <Route path="/about-us" element={<AboutUsPage />} />
           
